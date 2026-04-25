@@ -148,7 +148,7 @@
             this.container.className = 'minimized';
             this.container.innerHTML = `
                 <div id="njust-enhance-log-hd">
-                    <b><span id="nel-status-text">南理工教务增强助手V2</span></b>
+                    <b><span id="nel-status-text">南理工教务增强助手 V2</span></b>
                     <span id="nel-clear-btn" class="nel-btn nel-clear" title="清空日志">清空</span>
                     <span id="njust-log-toggle" class="nel-btn">展开 ▴</span>
                 </div>
@@ -227,7 +227,7 @@
                 // 恢复默认状态文字
                 const statusText = this.container && this.container.querySelector('#nel-status-text');
                 if (statusText) {
-                    statusText.textContent = '南理工教务增强助手V2';
+                    statusText.textContent = '南理工教务增强助手 V2';
                     statusText.style.color = '#2d3748';
                     statusText.style.opacity = '0.95';
                 }
@@ -589,7 +589,7 @@
                         验证码区分大小写，大部分情况下均为小写
                     </div>
                 `;
-                try { createUnifiedModal('南理工教务增强助手', content, 'warning'); }
+                try { createUnifiedModal('南理工教务增强助手 V2', content, 'warning'); }
                 catch (e) { Logger.error('创建强智科技页面提示弹窗失败:', e); }
                 return true;
             }
@@ -730,7 +730,7 @@
                     display: flex; justify-content: space-between; align-items: center;
                     border-bottom: 1px solid #e0e0e0;">
                     <div style="color: #333; font-weight: 600; font-size: 17px; letter-spacing: 1px;">
-                        🎓 南理工教务增强助手
+                        🎓 南理工教务增强助手 V2
                     </div>
                     <span id="creditCloseBtn" style="cursor: pointer; color: #888; font-size: 18px;
                         padding: 2px 8px; border-radius: 4px; transition: background-color 0.2s;">✕</span>
@@ -1437,6 +1437,9 @@
         const style = document.createElement('style');
         style.id = 'v80-style';
         style.textContent = `
+            /* 隐藏模块一的日志面板，避免重复显示 */
+            #njust-enhance-log { display: none !important; }
+
             /* 控制面板主容器 */
             #v80-panel {
                 position: fixed; top: 20px; right: 20px; width: 490px;
@@ -1453,12 +1456,6 @@
                 cursor: move; display: flex; align-items: center; gap: 8px; user-select: none; flex-shrink: 0;
             }
             #v80-header b { flex: 1; font-size: 14px; color: #2d3748; }
-            #v80-min-btn {
-                width: 28px; height: 28px; border-radius: 6px; background: #edf2f7; color: #4a5568;
-                border: none; font-size: 16px; cursor: pointer;
-                display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-            }
-            #v80-min-btn:hover { background: #e2e8f0; }
             #v80-action-bar { padding: 10px 14px 8px; border-bottom: 1px solid #edf2f7; background: #fff; flex-shrink: 0; }
             #v80-submit-hint { font-size: 11px; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; display: none; line-height: 1.6; }
             #v80-submit-hint.visible { display: block; }
@@ -1510,7 +1507,6 @@
             .log-warn { background: rgba(237,137,54,0.05); } .log-warn .log-lvl { color: #c05621; background: rgba(237,137,54,0.1); }
             .log-error { background: rgba(245,101,101,0.08); } .log-error .log-lvl { color: #c53030; background: rgba(245,101,101,0.15); }
             .log-level-select { font-size: 11px; padding: 1px 5px; border-radius: 4px; background: #fff; color: #4a5568; border: 1px solid #cbd5e0; cursor: pointer; }
-            .minimized { transform: translateY(calc(100% - 44px)); }
             .v80-value-chip { display: inline-block; margin-left: 6px; font-size: 11px; color: #4a5568; }
         `;
         document.head.appendChild(style);
@@ -1527,7 +1523,7 @@
         panel.innerHTML = `
             <div id="v80-header">
                 <b>${titleHtml}</b>
-                <button id="v80-min-btn" title="最小化">−</button>
+                <span id="v80-close-btn" style="cursor:pointer;color:#718096;font-size:16px;padding:2px 8px;border-radius:4px;transition:background 0.2s;margin-left:8px;" title="关闭">✕</span>
             </div>
             <div id="v80-action-bar">${actionBarHtml}</div>
             <div id="v80-body">${bodyHtml}</div>
@@ -1557,8 +1553,16 @@
         `;
         document.body.appendChild(panel);
 
-        // 最小化切换
-        document.getElementById('v80-min-btn').onclick = (e) => { e.stopPropagation(); panel.classList.toggle('minimized'); };
+        // 关闭按钮
+        const closeBtn = document.getElementById('v80-close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                panel.remove();
+            });
+            closeBtn.addEventListener('mouseenter', () => closeBtn.style.backgroundColor = '#e2e8f0');
+            closeBtn.addEventListener('mouseleave', () => closeBtn.style.backgroundColor = 'transparent');
+        }
         // 日志区块折叠
         const logBody = document.getElementById('v80-log-content'), logArr = document.getElementById('log-arr');
         document.getElementById('log-hd').onclick = () => { logBody.classList.toggle('open'); logArr.textContent = logBody.classList.contains('open') ? '▴' : '▾'; };
@@ -1570,7 +1574,7 @@
         // 面板拖拽逻辑 (修正 transform 带来的坐标偏移问题)
         let drag = false, mouseStartX = 0, mouseStartY = 0, elemStartX = 0, elemStartY = 0;
         document.getElementById('v80-header').onmousedown = (e) => {
-            if (e.target.id === 'v80-min-btn') return;
+            if (e.target.id === 'v80-close-btn') return;
             const rect = panel.getBoundingClientRect();
             elemStartX = rect.left; elemStartY = rect.top;
             mouseStartX = e.clientX; mouseStartY = e.clientY;
