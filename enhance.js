@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         南理工教务增强助手 V2 | 支持自动评教
 // @namespace    http://tampermonkey.net/
-// @version      2.0.1.2
+// @version      2.0.1.3
 // @description  在合适的地方显示课程大纲、选修课类别及选修课学分情况，并自动刷新登录状态。同时支持自动评教与批量提交。
 // @match        http://202.119.81.112/*
 // @match        http://bkjw.njust.edu.cn/*
@@ -33,7 +33,8 @@
 
     // 选修课类别数据源（JSON 格式）
     const CATEGORY_URLS = [
-        'https://enhance.njust.wiki/data/xxk.json',                                                                    // 官方主节点
+        'https://enhance.njust.store/data/xxk.json',
+        'https://enhance.njust.wiki/data/xxk.json',                                                               // 官方主节点
         'https://fastly.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/xxk.json',                        // jsDelivr 全球加速
         'https://testingcf.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/xxk.json',                    // jsDelivr Cloudflare
         'https://raw.githubusercontent.com/NJUST-OpenLib/NJUST-JWC-Enhance/refs/heads/main/data/xxk.json'             // GitHub 原始文件（备用）
@@ -41,7 +42,8 @@
 
     // 课程大纲索引数据源（包含课程代码到 jx02id 的映射）
     const OUTLINE_URLS = [
-        'https://enhance.njust.wiki/data/kcdg.json',                                                                    // 官方主节点
+        'https://enhance.njust.store/data/kcdg.json',
+        'https://enhance.njust.wiki/data/kcdg.json',                                                               // 官方主节点
         'https://fastly.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/kcdg.json',                        // jsDelivr 全球加速
         'https://testingcf.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/kcdg.json',                    // jsDelivr Cloudflare
         'https://raw.githubusercontent.com/NJUST-OpenLib/NJUST-JWC-Enhance/refs/heads/main/data/kcdg.json'             // GitHub 原始文件（备用）
@@ -116,7 +118,7 @@
                     border-radius: 10px 10px 0 0; user-select: none; gap: 10px;
                 }
                 #njust-enhance-log-hd b { font-size: 13px; color: #2d3748; display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-                #nel-status-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; transition: color 0.2s; }
+                #nel-status-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; }
 
                 /* 日志列表样式 */
                 #njust-enhance-log-body {
@@ -129,7 +131,7 @@
                 .nel-clear:hover { background: rgba(245, 101, 101, 0.15); color: #c53030; }
 
                 /* 日志行与分级颜色 */
-                .nel-line { padding: 3px 12px; border-bottom: 1px solid rgba(226, 232, 240, 0.4); display: flex; gap: 8px; align-items: flex-start; transition: background 0.1s; }
+                .nel-line { padding: 3px 12px; border-bottom: 1px solid rgba(226, 232, 240, 0.4); display: flex; gap: 8px; align-items: flex-start; }
                 .nel-line:hover { background: #f7fafc; }
                 .nel-ts { color: #a0aec0; flex-shrink: 0; min-width: 55px; user-select: none; }
                 .nel-lvl { font-weight: bold; flex-shrink: 0; min-width: 42px; text-align: center; font-size: 10px; }
@@ -229,7 +231,6 @@
                 if (statusText) {
                     statusText.textContent = '南理工教务增强助手 V2';
                     statusText.style.color = '#2d3748';
-                    statusText.style.opacity = '0.95';
                 }
                 return;
             }
@@ -240,11 +241,9 @@
                 const colors = { error: '#e53e3e', warn: '#dd6b20', success: '#38a169', info: '#3182ce', debug: '#718096' };
                 statusText.textContent = msg;
                 statusText.style.color = colors[level] || '#2d3748';
-                statusText.style.opacity = '0.5';
-                setTimeout(() => { statusText.style.opacity = '1'; }, 80);
             }
-            // 每 200ms 切换下一条，形成滚动感
-            setTimeout(() => { this._playStatusQueue(); }, 200);
+            // 每 300ms 切换下一条，形成滚动感
+            setTimeout(() => { this._playStatusQueue(); }, 300);
         },
 
         esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -289,8 +288,8 @@
         },
 
         error(message, ...args) { this.log(this.LEVELS.ERROR, message, ...args); },
-        warn(message, ...args)  { this.log(this.LEVELS.WARN, message, ...args); },
-        info(message, ...args)  { this.log(this.LEVELS.INFO, message, ...args); },
+        warn(message, ...args) { this.log(this.LEVELS.WARN, message, ...args); },
+        info(message, ...args) { this.log(this.LEVELS.INFO, message, ...args); },
         debug(message, ...args) { this.log(this.LEVELS.DEBUG, message, ...args); }
     };
 
@@ -423,6 +422,52 @@
 
     initializeLogging();
 
+    // 早期初始化推广信息（在数据加载之前显示）
+    function initializePromoBanner() {
+        const tryShow = () => {
+            // 检查是否已存在
+            if (document.getElementById('njust-promo-line')) return true;
+
+            // 检查两种版权信息结构
+            const footer = document.getElementById('Footer1_divCopyright');
+            const copyrightLink = document.querySelector('a.copyright[href*="qzdatasoft"]');
+
+            if (footer || (copyrightLink && copyrightLink.parentElement)) {
+                showPromoBanner();
+                return true;
+            }
+            return false;
+        };
+
+        // 隐藏无法使用的二维码图片
+        const hideUnusedElements = () => {
+            const uselessImg = document.querySelector('img[src*="appewm.png"]');
+            if (uselessImg) {
+                uselessImg.style.display = 'none';
+            }
+        };
+
+        // 尝试立即显示和隐藏
+        if (tryShow()) {
+            hideUnusedElements();
+            return;
+        }
+
+        // 如果目标元素还不存在，监听 DOM 变化
+        const observer = new MutationObserver(() => {
+            if (tryShow()) {
+                hideUnusedElements();
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+
+        // 5 秒后停止监听（防止内存泄漏）
+        setTimeout(() => observer.disconnect(), 5000);
+    }
+
+    initializePromoBanner();
+
     let courseCategoryMap = {};
     let courseOutlineMap = {};
 
@@ -434,45 +479,58 @@
         const container = document.createElement('div');
         container.id = 'njustAssistantModal';
 
-        const gradientColor = {
-            warning: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
-            success:  'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
-            info:     'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-        }[type] || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        // Apple 风格主题色彩配置
+        const themeConfig = {
+            warning: { accent: '#FF9500', accentLight: 'rgba(255,149,0,0.12)' },
+            success: { accent: '#34C759', accentLight: 'rgba(52,199,89,0.12)' },
+            info: { accent: '#007AFF', accentLight: 'rgba(0,122,255,0.12)' }
+        };
+        const theme = themeConfig[type] || themeConfig.info;
 
         container.style.cssText = `
             position: fixed; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            background: ${gradientColor};
-            border: none; border-radius: 15px; padding: 0;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            z-index: 10000; min-width: 200px; max-width: 500px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            overflow: hidden; animation: njustFadeIn 0.3s ease-out;
+            background: #ffffff;
+            border: none; border-radius: 20px; padding: 0;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.18), 0 0 0 0.5px rgba(0,0,0,0.08);
+            z-index: 10000; min-width: 340px; max-width: 460px;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden; animation: njustFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         `;
 
         container.innerHTML = `
-            <div id="dragHandle" style="
-                background: rgba(255,255,255,0.1); padding: 15px 20px; cursor: move;
-                display: flex; justify-content: space-between; align-items: center;
-                border-bottom: 1px solid rgba(255,255,255,0.2);">
-                <div style="color: white; font-weight: bold; font-size: 18px;">🎓 ${title}</div>
-                <span id="closeModalBtn" style="cursor: pointer; color: rgba(255,255,255,0.8); font-size: 18px;
-                    padding: 2px 6px; border-radius: 4px; transition: background-color 0.2s;">✕</span>
-            </div>
-            <div style="background: white; padding: 25px;">
-                ${content}
-                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;
-                    font-size: 12px; color: #666; line-height: 1.4; text-align: center;">
-                    <div style="margin-bottom: 8px;">
-                        <strong>请查看
-                        <a href="https://enhance.njust.wiki" target="_blank"
-                            style="color: #007bff; text-decoration: none;">官方网站</a>
-                        以获取使用说明</strong>
+            <div id="dragHandle" style="padding: 24px 28px 20px 28px; cursor: move;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                    <div style="font-size: 20px; font-weight: 600; color: #1d1d1f; letter-spacing: -0.3px;">
+                        ${title}
                     </div>
-                    <div style="color: #ff6b6b; font-weight: bold; margin-bottom: 5px;">⚠️ 免责声明</div>
-                    <div>本工具仅为学习交流使用，数据仅供参考。</div>
-                    <div>请以教务处官网信息为准，使用本工具产生的任何后果均由用户自行承担。</div>
+                    <button id="closeModalBtn" style="
+                        width: 28px; height: 28px; border-radius: 50%;
+                        border: none; background: #f5f5f7;
+                        cursor: pointer; display: flex; align-items: center;
+                        justify-content: center; color: #86868b;
+                        font-size: 16px; transition: all 0.15s;
+                        margin-left: 16px; flex-shrink: 0;
+                    ">×</button>
+                </div>
+                <div style="color: #424245; font-size: 14px; line-height: 1.65; font-weight: 400;">
+                    ${content}
+                </div>
+            </div>
+            <div style="padding: 16px 28px 22px 28px; background: #f5f5f7; border-top: 1px solid #e5e5ea;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                    <a href="https://enhance.njust.wiki" target="_blank"
+                        style="color: ${theme.accent}; text-decoration: none; font-weight: 500; font-size: 14px;">
+                        查看使用说明
+                    </a>
+                </div>
+                <div style="
+                    padding: 12px 14px;
+                    background: ${theme.accentLight}; border-radius: 10px;
+                ">
+                    <div style="font-size: 12px; color: #424245; line-height: 1.5;">
+                        <strong style="color: ${theme.accent};">免责声明</strong> — 本工具仅供学习交流，数据仅供参考。请以教务处官网信息为准，使用本工具产生的任何后果由用户自行承担。
+                    </div>
                 </div>
             </div>
         `;
@@ -480,12 +538,12 @@
         if (!document.getElementById('njustAssistantStyles')) {
             const style = document.createElement('style');
             style.id = 'njustAssistantStyles';
-            // fix②: 避免与 LogPanelUI 的动画同名冲突，改用前缀 njustFadeIn
             style.textContent = `
                 @keyframes njustFadeIn {
-                    from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+                    from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
                     to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
                 }
+                #closeModalBtn:hover { background: #e8e8ed; color: #1d1d1f; }
             `;
             document.head.appendChild(style);
         }
@@ -497,8 +555,6 @@
         const closeBtn = container.querySelector('#closeModalBtn');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => container.remove());
-            closeBtn.addEventListener('mouseenter', () => closeBtn.style.backgroundColor = 'rgba(255,255,255,0.2)');
-            closeBtn.addEventListener('mouseleave', () => closeBtn.style.backgroundColor = 'transparent');
         }
 
         return container;
@@ -533,10 +589,10 @@
             const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
             const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
             const newLeft = elemStartX + (clientX - mouseStartX);
-            const newTop  = elemStartY + (clientY - mouseStartY);
+            const newTop = elemStartY + (clientY - mouseStartY);
             container.style.transform = 'none';  // 清除动画 transform
             container.style.left = newLeft + 'px';
-            container.style.top  = newTop  + 'px';
+            container.style.top = newTop + 'px';
             // 若原来用 translate(-50%,-50%) 定位，拖动后改为绝对位置
             container.style.margin = '0';
         }
@@ -558,35 +614,39 @@
             if (pageTitle.includes('强智科技教务系统概念版')) {
                 Logger.warn('检测到强智科技概念版页面，显示登录引导');
                 const content = `
-                    <div style="text-align: center; font-size: 16px; color: #333; margin-bottom: 20px; line-height: 1.6;">
-                        <div style="font-size: 20px; margin-bottom: 15px;">🚫 该页面无法登录</div>
-                        <div style="margin-top: 10px;">请转向以下正确的登录页面:</div>
-                    </div>
-                    <div style="text-align: center; margin: 20px 0;">
-                        <div style="margin: 10px 0;">
-                            <a href="https://www.njust.edu.cn/" target="_blank" style="
-                                display: inline-block; background: #28a745; color: white;
-                                padding: 12px 20px; text-decoration: none; border-radius: 8px;
-                                margin: 5px; font-weight: bold;">
-                                🏫 智慧理工登录页面
-                            </a>
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size: 15px; font-weight: 500; color: #1d1d1f; margin-bottom: 10px;">
+                            当前页面无法登录
                         </div>
-                        <div style="margin: 10px 0;">
-                            <a href="http://202.119.81.113:8080/" target="_blank" style="
-                                display: inline-block; background: #007bff; color: white;
-                                padding: 12px 20px; text-decoration: none; border-radius: 8px;
-                                margin: 5px; font-weight: bold;">
-                                🔗 教务处登录页面
-                            </a>
+                        <div style="font-size: 14px; color: #424245; line-height: 1.6;">
+                            这是强智科技教务系统概念版，仅供展示，不提供登录功能。请前往以下入口登录教务系统。
                         </div>
                     </div>
-                    <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px;
-                        font-size: 14px; color: #666; text-align: center;">
-                        💡 提示:<br>
-                        强智科技教务系统概念版是无法登陆的。<br>
-                        请使用上述链接跳转到正确的登录页面，<br>
-                        登录后可正常使用教务系统功能<br>
-                        验证码区分大小写，大部分情况下均为小写
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <a href="http://202.119.81.113:8080/" target="_blank" style="
+                            display: flex; align-items: center; justify-content: center;
+                            background: #007AFF; color: white;
+                            padding: 13px 20px; text-decoration: none; border-radius: 12px;
+                            font-weight: 500; font-size: 15px; text-align: center;
+                            transition: background 0.15s;"
+                            onmouseover="this.style.background='#0066d6'" onmouseout="this.style.background='#007AFF'">
+                            教务处登录入口
+                            <span style="margin-left: 8px; font-size: 11px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 6px;">推荐</span>
+                        </a>
+                        <a href="https://www.njust.edu.cn/" target="_blank" style="
+                            display: block; background: #f5f5f7; color: #1d1d1f;
+                            padding: 13px 20px; text-decoration: none; border-radius: 12px;
+                            font-weight: 500; font-size: 15px; text-align: center;
+                            border: 1px solid #d2d2d7; transition: background 0.15s;"
+                            onmouseover="this.style.background='#e8e8ed'" onmouseout="this.style.background='#f5f5f7'">
+                            智慧理工登录入口
+                        </a>
+                    </div>
+                    <div style="margin-top: 18px; padding: 14px; background: #f5f5f7; border-radius: 10px;">
+                        <div style="font-size: 13px; color: #424245; line-height: 1.6;">
+                            <strong style="color: #1d1d1f;">温馨提示</strong><br>
+                            验证码区分大小写，通常为小写字母。如遇登录问题，建议使用教务处入口。
+                        </div>
                     </div>
                 `;
                 try { createUnifiedModal('南理工教务增强助手 V2', content, 'warning'); }
@@ -598,6 +658,61 @@
             Logger.error('检测强智科技页面失败:', e);
             return false;
         }
+    }
+
+    // ==================== 梨课程推荐提示 ====================
+    function showPromoBanner() {
+        // 检查是否已存在
+        if (document.getElementById('njust-promo-line')) return;
+
+        // 查找底部版权信息区域（支持两种页面结构）
+        let insertTarget = null;
+        let isLoginPage = false;
+
+        // 1. 登录后的页面：Footer1_divCopyright
+        const footer = document.getElementById('Footer1_divCopyright');
+        if (footer) {
+            insertTarget = footer;
+        }
+
+        // 2. 登录页面：包含 class="copyright" 的 td 元素
+        if (!insertTarget) {
+            const copyrightLink = document.querySelector('a.copyright[href*="qzdatasoft"]');
+            if (copyrightLink && copyrightLink.parentElement && copyrightLink.parentElement.tagName === 'TD') {
+                insertTarget = copyrightLink.parentElement;
+                isLoginPage = true;
+            }
+        }
+
+        if (!insertTarget) return;
+
+        // 创建推荐文本行（纯文本样式，与页面风格融合）
+        const promoLine = document.createElement('div');
+        promoLine.id = 'njust-promo-line';
+        if (!isLoginPage) {
+            promoLine.className = 'Nsb_pw';
+        }
+        promoLine.style.cssText = `
+            padding: 8px 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        `;
+
+        promoLine.innerHTML = `
+            <strong>推荐：</strong>尝试最新开发，支持本科生/研究生的 <strong>梨课程</strong>。
+            可以在<a href="https://github.com/simpleClover/NJUSTSchedule/releases/latest" target="_blank"
+                style="color: #007bff; text-decoration: none;">GitHub 下载</a> 或
+            <a href="https://course-cdn.njust.store/?dir=/NJUSTSchedule/releases/download" target="_blank"
+                style="color: #007bff; text-decoration: none;">CDN 下载</a>
+            <span style="font-size: 11px; color: #888;">(Android/HarmonyOS)</span>，IOS/PC 用户也可使用
+            <a href="https://Course.njust.store" target="_blank"
+                style="color: #007bff; text-decoration: none;">网页版</a>。
+
+        `;
+
+        // 在目标元素上方插入
+        insertTarget.parentNode.insertBefore(promoLine, insertTarget);
     }
 
     // ==================== 数据加载（智能切源）====================
@@ -778,7 +893,7 @@
                     const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
                     container.style.right = 'auto';
                     container.style.left = (elemStartX + clientX - mouseStartX) + 'px';
-                    container.style.top  = (elemStartY + clientY - mouseStartY) + 'px';
+                    container.style.top = (elemStartY + clientY - mouseStartY) + 'px';
                 };
                 const dragEnd = () => { isDragging = false; };
 
@@ -823,7 +938,7 @@
                     const tds = row.querySelectorAll('td');
                     if (tds.length < 11) return;
                     const courseCode = tds[2].textContent.trim();
-                    const credit     = parseFloat(tds[6].textContent) || 0;
+                    const credit = parseFloat(tds[6].textContent) || 0;
                     const courseType = tds[10].textContent.trim();
 
                     const categoryDiv = tds[2].querySelector('[data-category-inserted]');
@@ -845,10 +960,10 @@
                 });
             });
 
-            const totalCreditsByType     = Object.values(creditsByType).reduce((s, d) => s + d.credits, 0);
-            const totalCountByType       = Object.values(creditsByType).reduce((s, d) => s + d.count, 0);
+            const totalCreditsByType = Object.values(creditsByType).reduce((s, d) => s + d.credits, 0);
+            const totalCountByType = Object.values(creditsByType).reduce((s, d) => s + d.count, 0);
             const totalCreditsByCategory = Object.values(creditsByCategory).reduce((s, d) => s + d.credits, 0);
-            const totalCountByCategory   = Object.values(creditsByCategory).reduce((s, d) => s + d.count, 0);
+            const totalCountByCategory = Object.values(creditsByCategory).reduce((s, d) => s + d.count, 0);
 
             let summaryHTML = `<div style="border-bottom: 1px solid #e0e0e0; margin-bottom: 12px; padding-bottom: 10px;">`;
             summaryHTML += `<div style="margin-bottom: 8px; font-size: 15px; color: #222; font-weight: 600;">📊 按课程性质统计</div>`;
@@ -901,10 +1016,10 @@
         try {
             const tables = document.querySelectorAll('table');
             // 页面类型识别
-            const isGradePage    = window.location.pathname.includes('/njlgdx/kscj/cjcx_list');
+            const isGradePage = window.location.pathname.includes('/njlgdx/kscj/cjcx_list');
             const isSchedulePage = window.location.pathname.includes('xskb_list.do') &&
-                                   document.title.includes('学期理论课表');
-            const isSmartCampus  = window.location.href.includes('bkjw.njust.edu.cn');
+                document.title.includes('学期理论课表');
+            const isSmartCampus = window.location.href.includes('bkjw.njust.edu.cn');
 
             let processedTables = 0, processedRows = 0, enhancedCourses = 0;
 
@@ -926,10 +1041,10 @@
                             // 不同页面的课程代码提取逻辑差异化处理
                             if (isGradePage) {
                                 courseCodeTd = tds[2];
-                                courseCode   = courseCodeTd ? courseCodeTd.textContent.trim() : '';
+                                courseCode = courseCodeTd ? courseCodeTd.textContent.trim() : '';
                             } else if (isSchedulePage) {
                                 courseCodeTd = tds[1];
-                                courseCode   = courseCodeTd ? courseCodeTd.textContent.trim() : '';
+                                courseCode = courseCodeTd ? courseCodeTd.textContent.trim() : '';
                             } else {
                                 // 通用逻辑：提取形如 "课程名<br>课程代码" 的结构
                                 courseCodeTd = tds[1];
@@ -950,9 +1065,9 @@
                                     if (category) {
                                         const catDiv = document.createElement('div');
                                         catDiv.setAttribute('data-category-inserted', '1');
-                                        catDiv.style.color      = '#28a745';
+                                        catDiv.style.color = '#28a745';
                                         catDiv.style.fontWeight = 'bold';
-                                        catDiv.style.marginTop  = '4px';
+                                        catDiv.style.marginTop = '4px';
                                         catDiv.textContent = category;
                                         courseCodeTd.appendChild(catDiv);
                                         courseEnhanced = true;
@@ -966,8 +1081,8 @@
                                     courseCodeTd.title && !courseCodeTd.querySelector('[data-title-inserted]')) {
                                     const titleDiv = document.createElement('div');
                                     titleDiv.setAttribute('data-title-inserted', '1');
-                                    titleDiv.style.color     = '#666';
-                                    titleDiv.style.fontSize  = '13px';
+                                    titleDiv.style.color = '#666';
+                                    titleDiv.style.fontSize = '13px';
                                     titleDiv.style.marginTop = '4px';
                                     titleDiv.style.fontStyle = 'italic';
                                     titleDiv.textContent = `📌 老师说明: ${courseCodeTd.title}`;
@@ -985,24 +1100,24 @@
 
                                     if (isSmartCampus) {
                                         // 智慧理工平台因跨域和权限限制，无法直接预览官网大纲
-                                        outlineDiv.textContent      = '⚠️ 课程大纲功能受限';
-                                        outlineDiv.style.color      = '#ff9800';
+                                        outlineDiv.textContent = '⚠️ 课程大纲功能受限';
+                                        outlineDiv.style.color = '#ff9800';
                                         outlineDiv.style.fontWeight = 'bold';
-                                        outlineDiv.style.cursor     = 'pointer';
+                                        outlineDiv.style.cursor = 'pointer';
                                         outlineDiv.title = '当前使用智慧理工平台，课程大纲功能受限。请访问教务处官网获取完整功能';
                                     } else {
                                         const realId = courseOutlineMap[courseCode];
                                         if (realId) {
-                                            const link  = document.createElement('a');
+                                            const link = document.createElement('a');
                                             // 拼接教务处官网预览链接
-                                            link.href   = `http://202.119.81.112:8080/kcxxAction.do?method=kcdgView&jx02id=${realId}&isentering=0`;
+                                            link.href = `http://202.119.81.112:8080/kcxxAction.do?method=kcdgView&jx02id=${realId}&isentering=0`;
                                             link.textContent = '📘 查看课程大纲';
                                             link.target = '_blank';
                                             link.style.color = '#0077cc';
                                             outlineDiv.appendChild(link);
                                         } else {
-                                            outlineDiv.textContent  = '❌ 无大纲信息';
-                                            outlineDiv.style.color  = 'gray';
+                                            outlineDiv.textContent = '❌ 无大纲信息';
+                                            outlineDiv.style.color = 'gray';
                                         }
                                     }
                                     courseCodeTd.appendChild(outlineDiv);
@@ -1031,13 +1146,13 @@
      */
     function checkLoginErrorAndRefresh() {
         try {
-            const pageTitle   = document.title || '';
+            const pageTitle = document.title || '';
             const pageContent = document.body ? document.body.textContent : '';
             // 匹配典型的教务处报错关键词
             const isLoginError = pageTitle.includes('出错页面') &&
                 (pageContent.includes('您登录后过长时间没有操作') ||
-                 pageContent.includes('您的用户名已经在别处登录') ||
-                 pageContent.includes('请重新输入帐号，密码后，继续操作'));
+                    pageContent.includes('您的用户名已经在别处登录') ||
+                    pageContent.includes('请重新输入帐号，密码后，继续操作'));
 
             if (isLoginError) {
                 Logger.warn('检测到登录超时或重复登录错误页面，正在自动刷新...');
@@ -1140,7 +1255,7 @@
                 return;
             }
 
-            const currentUrl    = window.location.href;
+            const currentUrl = window.location.href;
             const isSmartCampus = currentUrl.includes('bkjw.njust.edu.cn');
             if (isSmartCampus) {
                 Logger.warn('检测到智慧理工平台，课程大纲功能将受限');
@@ -1184,8 +1299,8 @@
                                 // 忽略脚本自己插入的 DOM
                                 if (node.hasAttribute &&
                                     (node.hasAttribute('data-category-inserted') ||
-                                     node.hasAttribute('data-title-inserted') ||
-                                     node.hasAttribute('data-outline-inserted'))) {
+                                        node.hasAttribute('data-title-inserted') ||
+                                        node.hasAttribute('data-outline-inserted'))) {
                                     return false;
                                 }
                                 // 只关注表格类变更
@@ -1247,31 +1362,31 @@
 
     // ── 常量定义 ─────────────────────────────────────────────────────
     // 存储键名，用于跨页面同步状态
-    const KEY_STORE    = 'njust_eval_v1_store';    // 核心存储：课程状态、评分选项等
-    const KEY_RUNNING  = 'njust_eval_running';     // 全局标志：是否处于“开始评价并保存”流水线中
-    const KEY_BUSY     = 'njust_eval_busy';        // 互斥锁：防止多个窗口同时执行保存操作
-    const KEY_QUEUE    = 'njust_eval_queue';       // 队列：待处理的类别 URL 列表
-    const KEY_CURLIST  = 'njust_eval_curlist';     // 当前正在处理的类别 URL
-    const KEY_LOG      = 'njust_eval_log';         // 日志存储
-    const KEY_LOGLVL   = 'njust_eval_loglvl';      // 日志显示等级过滤
+    const KEY_STORE = 'njust_eval_v1_store';    // 核心存储：课程状态、评分选项等
+    const KEY_RUNNING = 'njust_eval_running';     // 全局标志：是否处于“开始评价并保存”流水线中
+    const KEY_BUSY = 'njust_eval_busy';        // 互斥锁：防止多个窗口同时执行保存操作
+    const KEY_QUEUE = 'njust_eval_queue';       // 队列：待处理的类别 URL 列表
+    const KEY_CURLIST = 'njust_eval_curlist';     // 当前正在处理的类别 URL
+    const KEY_LOG = 'njust_eval_log';         // 日志存储
+    const KEY_LOGLVL = 'njust_eval_loglvl';      // 日志显示等级过滤
     const KEY_SUBQUEUE = 'njust_eval_subqueue';    // 待提交课程的 URL 队列
-    const KEY_SUBRUN   = 'njust_eval_subrun';      // 全局标志：是否处于“提交已评课程”流水线中
-    const KEY_SUBBSY   = 'njust_eval_subbsy';      // 互斥锁：防止多个窗口同时执行提交操作
+    const KEY_SUBRUN = 'njust_eval_subrun';      // 全局标志：是否处于“提交已评课程”流水线中
+    const KEY_SUBBSY = 'njust_eval_subbsy';      // 互斥锁：防止多个窗口同时执行提交操作
 
     // URL 参数，用于传递指令给详情页
-    const PARAM_AUTO   = 'isAutoEval';             // 详情页接收后执行自动填分+保存
+    const PARAM_AUTO = 'isAutoEval';             // 详情页接收后执行自动填分+保存
     const PARAM_SUBMIT = 'isAutoSubmit';           // 详情页接收后执行自动提交
-    const MAX_LOG      = 300;                      // 日志最大保留条数
+    const MAX_LOG = 300;                      // 日志最大保留条数
 
     // ── 日志系统 ─────────────────────────────────────────────────────
     // 日志级别与 UI 映射
     const LOG_LEVELS = { debug: 0, info: 1, success: 2, warn: 3, error: 4 };
     const LOG_LABELS = { debug: 'DBG', info: 'INF', success: 'OK ', warn: 'WRN', error: 'ERR' };
-    const LOG_ICONS  = { debug: '🔍', info: 'ℹ️', success: '✅', warn: '⚠️', error: '❌' };
+    const LOG_ICONS = { debug: '🔍', info: 'ℹ️', success: '✅', warn: '⚠️', error: '❌' };
 
     // 日志持久化与读取
-    const loadLogs    = () => JSON.parse(localStorage.getItem(KEY_LOG) || '[]');
-    const clearLogs   = () => { localStorage.removeItem(KEY_LOG); renderLogPanel(); };
+    const loadLogs = () => JSON.parse(localStorage.getItem(KEY_LOG) || '[]');
+    const clearLogs = () => { localStorage.removeItem(KEY_LOG); renderLogPanel(); };
     const getMinLevel = () => { const s = localStorage.getItem(KEY_LOGLVL); return (s && LOG_LEVELS[s] !== undefined) ? s : 'info'; };
     const setMinLevel = (l) => { localStorage.setItem(KEY_LOGLVL, l); renderLogPanel(); };
 
@@ -1293,9 +1408,9 @@
             window.__NJUST_LOGGER__.log(loggerLevel, `[评教] ${msg}`);
         }
     };
-    const logInfo    = (m) => pushLog(m, 'info');
+    const logInfo = (m) => pushLog(m, 'info');
     const logSuccess = (m) => pushLog(m, 'success');
-    const logError   = (m) => pushLog(m, 'error');
+    const logError = (m) => pushLog(m, 'error');
 
     /**
      * 渲染控制面板底部的日志区域（已简化，日志现在显示在模块一的面板中）
@@ -1316,17 +1431,17 @@
     };
 
     // 生成课程唯一 Key (课程ID + 教师ID)
-    const courseKey    = (url) => { const cid = qp(url, 'jx02id'), tid = qp(url, 'jg0101id'); return cid && tid ? `${cid}__${tid}` : null; };
-    const appendParam  = (url, key, val) => url + (url.includes('?') ? '&' : '?') + key + '=' + val;
-    const withAuto     = (url, val) => appendParam(url, PARAM_AUTO, val);
-    const withSubmit   = (url) => appendParam(url, PARAM_SUBMIT, 'true');
-    const roundFloat   = (n) => Math.round(n * 1e9) / 1e9; // 解决浮点数精度误差
+    const courseKey = (url) => { const cid = qp(url, 'jx02id'), tid = qp(url, 'jg0101id'); return cid && tid ? `${cid}__${tid}` : null; };
+    const appendParam = (url, key, val) => url + (url.includes('?') ? '&' : '?') + key + '=' + val;
+    const withAuto = (url, val) => appendParam(url, PARAM_AUTO, val);
+    const withSubmit = (url) => appendParam(url, PARAM_SUBMIT, 'true');
+    const roundFloat = (n) => Math.round(n * 1e9) / 1e9; // 解决浮点数精度误差
 
     // 快捷访问 LocalStorage
-    const loadStore    = () => JSON.parse(localStorage.getItem(KEY_STORE) || '{}');
-    const saveStore    = (v) => localStorage.setItem(KEY_STORE, JSON.stringify(v));
-    const loadQueue    = () => JSON.parse(localStorage.getItem(KEY_QUEUE) || '[]');
-    const saveQueue    = (q) => localStorage.setItem(KEY_QUEUE, JSON.stringify(q));
+    const loadStore = () => JSON.parse(localStorage.getItem(KEY_STORE) || '{}');
+    const saveStore = (v) => localStorage.setItem(KEY_STORE, JSON.stringify(v));
+    const loadQueue = () => JSON.parse(localStorage.getItem(KEY_QUEUE) || '[]');
+    const saveQueue = (q) => localStorage.setItem(KEY_QUEUE, JSON.stringify(q));
     const loadSubQueue = () => JSON.parse(localStorage.getItem(KEY_SUBQUEUE) || '[]');
     const saveSubQueue = (q) => localStorage.setItem(KEY_SUBQUEUE, JSON.stringify(q));
 
@@ -1346,7 +1461,7 @@
         const groups = {};
         document.querySelectorAll('input[type="radio"]').forEach(r => {
             if (!groups[r.name]) groups[r.name] = [];
-            const idx  = r.id.split('_')[1];
+            const idx = r.id.split('_')[1];
             // 查找隐藏域中的分值 (pj0601fz_...)
             const fzEl = document.getElementsByName(`pj0601fz_${idx}_${r.value}`)[0];
             groups[r.name].push({ el: r, score: fzEl ? parseFloat(fzEl.value) || 0 : 0 });
@@ -1388,7 +1503,7 @@
         const { gkeys, groups } = collectGroups();
         gkeys.forEach(k => {
             groups[k].forEach(({ el, score }) => {
-                const idx  = el.id.split('_')[1];
+                const idx = el.id.split('_')[1];
                 const fzEl = document.getElementsByName(`pj0601fz_${idx}_${el.value}`)[0];
                 if (!fzEl) return;
                 let next = fzEl.nextElementSibling;
@@ -1548,8 +1663,8 @@
         };
         document.onmousemove = (e) => {
             if (!drag) return;
-            panel.style.left  = (elemStartX + e.clientX - mouseStartX) + 'px';
-            panel.style.top   = (elemStartY + e.clientY - mouseStartY) + 'px';
+            panel.style.left = (elemStartX + e.clientX - mouseStartX) + 'px';
+            panel.style.top = (elemStartY + e.clientY - mouseStartY) + 'px';
             panel.style.right = 'auto';
         };
         document.onmouseup = () => { drag = false; };
@@ -1566,9 +1681,9 @@
             const anchors = document.querySelectorAll('a[href*="xspj_list.do"]');
             const found = [];
             anchors.forEach(a => {
-                const href  = a.getAttribute('href');
+                const href = a.getAttribute('href');
                 const label = a.textContent.trim() || a.title || href;
-                const abs   = href.startsWith('http') ? href : location.origin + href;
+                const abs = href.startsWith('http') ? href : location.origin + href;
                 found.push({ label, url: abs });
             });
             return found;
@@ -1597,7 +1712,7 @@
             `<div id="entry-list"></div>`
         );
         // 初始化布局调整
-        (function(){const p=document.getElementById('v80-panel');if(p)p.classList.add('wide');})();
+        (function () { const p = document.getElementById('v80-panel'); if (p) p.classList.add('wide'); })();
 
         /**
          * 渲染各类别入口的卡片及完成进度
@@ -1610,12 +1725,12 @@
             if (!box) return;
             box.innerHTML = '';
             entries.forEach(entry => {
-                const pj01    = qp(entry.url, 'pj01id');
+                const pj01 = qp(entry.url, 'pj01id');
                 // 从存储中筛选属于该类别的课程
                 const related = Object.values(store).filter(c => c.url && qp(c.url, 'pj01id') === pj01);
-                const doneN   = related.filter(c => c.done).length;
-                const totalN  = related.length;
-                const isCur   = running && curList && entry.url.includes(qp(curList, 'pj01id'));
+                const doneN = related.filter(c => c.done).length;
+                const totalN = related.length;
+                const isCur = running && curList && entry.url.includes(qp(curList, 'pj01id'));
                 const allDone = totalN > 0 && doneN === totalN;
                 const card = document.createElement('div');
                 card.className = 'entry-card';
@@ -1780,15 +1895,15 @@
         };
 
         // 按钮点击事件绑定
-        document.getElementById('start-btn').onclick      = () => { localStorage.setItem(KEY_RUNNING, 'true'); localStorage.setItem(KEY_BUSY, 'false'); renderList(); execNext(); };
+        document.getElementById('start-btn').onclick = () => { localStorage.setItem(KEY_RUNNING, 'true'); localStorage.setItem(KEY_BUSY, 'false'); renderList(); execNext(); };
         document.getElementById('submit-all-btn').onclick = () => {
             const store = loadStore(), toSubmit = parseRows().filter(c => { const info = store[c.key]; return (c.evaluated || (info && info.done)) && !c.submitted && (info ? info.auto !== false : true); });
             if (toSubmit.length === 0) return;
             if (!confirm(`即将提交以下 ${toSubmit.length} 门课程：\n` + toSubmit.map(c => `· ${c.name}（${c.teacher}）`).join('\n') + '\n\n确认继续？')) return;
             const queue = toSubmit.map(c => withSubmit(c.rawUrl)); saveSubQueue(queue); localStorage.setItem(KEY_SUBRUN, 'true'); localStorage.setItem(KEY_SUBBSY, 'false'); execNextSubmit();
         };
-        document.getElementById('reset-btn').onclick      = () => { if (confirm('重置所有缓存？')) { [KEY_STORE, KEY_RUNNING, KEY_BUSY, KEY_QUEUE, KEY_CURLIST, KEY_SUBQUEUE, KEY_SUBRUN, KEY_SUBBSY].forEach(k => localStorage.removeItem(k)); location.reload(); } };
-        document.getElementById('clear-log-btn').onclick  = () => clearLogs();
+        document.getElementById('reset-btn').onclick = () => { if (confirm('重置所有缓存？')) { [KEY_STORE, KEY_RUNNING, KEY_BUSY, KEY_QUEUE, KEY_CURLIST, KEY_SUBQUEUE, KEY_SUBRUN, KEY_SUBBSY].forEach(k => localStorage.removeItem(k)); location.reload(); } };
+        document.getElementById('clear-log-btn').onclick = () => clearLogs();
 
         // 跨页面状态监听：当其他窗口修改了 busy 标志或完成状态时，本页面及时响应并触发下一步
         window.addEventListener('storage', (e) => {
@@ -1806,8 +1921,8 @@
     if (location.href.includes('xspj_edit.do')) {
         const params = new URLSearchParams(location.search);
         const isAutoSave = params.get(PARAM_AUTO) === 'true';
-        const isAutoSub  = params.get(PARAM_SUBMIT) === 'true';
-        const isManual   = !isAutoSave && !isAutoSub;
+        const isAutoSub = params.get(PARAM_SUBMIT) === 'true';
+        const isManual = !isAutoSave && !isAutoSub;
 
         // 手动模式：注入顶栏快捷填分工具
         if (isManual) {
@@ -1834,19 +1949,19 @@
                 document.body.prepend(bar);
 
                 const scoreDisplay = document.getElementById('v8-score-display');
-                const manualHint   = document.getElementById('v8-manual-hint');
+                const manualHint = document.getElementById('v8-manual-hint');
                 const refreshScore = () => {
                     const { gkeys: gk2, groups: gr2 } = collectGroups();
-                    const total    = calcCurrentTotal(gk2, gr2);
+                    const total = calcCurrentTotal(gk2, gr2);
                     const answered = gk2.filter(k => gr2[k].some(o => o.el.checked)).length;
                     scoreDisplay.textContent = answered === 0 ? '未填写' : `总分 ${total} (${answered}/${gk2.length}题)`;
                     scoreDisplay.style.color = '#276749';
                 };
                 const strategies = [
                     { id: 'v8-fill-highest', s: 'highest', label: '最高分' },
-                    { id: 'v8-fill-high',    s: 'high',    label: '中高分' },
-                    { id: 'v8-fill-mid',     s: 'mid',     label: '中分'   },
-                    { id: 'v8-fill-low',     s: 'low',     label: '低分'   }
+                    { id: 'v8-fill-high', s: 'high', label: '中高分' },
+                    { id: 'v8-fill-mid', s: 'mid', label: '中分' },
+                    { id: 'v8-fill-low', s: 'low', label: '低分' }
                 ];
                 strategies.forEach(({ id, s, label }) => {
                     document.getElementById(id).addEventListener('click', () => {
@@ -1867,10 +1982,10 @@
 
         // 自动模式（保存或提交）
         injectCSS();
-        const bgColor   = isAutoSub ? '#f0fff4' : '#ebf8ff';
-        const bdColor   = isAutoSub ? '#9ae6b4' : '#90cdf4';
-        const textColor = isAutoSub ? '#276749'  : '#2c5282';
-        const modeName  = isAutoSub ? '✅ 提交模式' : '💾 保存模式';
+        const bgColor = isAutoSub ? '#f0fff4' : '#ebf8ff';
+        const bdColor = isAutoSub ? '#9ae6b4' : '#90cdf4';
+        const textColor = isAutoSub ? '#276749' : '#2c5282';
+        const modeName = isAutoSub ? '✅ 提交模式' : '💾 保存模式';
 
         const bar = document.createElement('div');
         bar.style.cssText = `position:sticky;top:0;left:0;width:100%;z-index:99999;box-sizing:border-box;background:${bgColor};color:${textColor};border-bottom:2px solid ${bdColor};box-shadow:0 2px 8px rgba(0,0,0,0.08);font-family:sans-serif;`;
@@ -1885,7 +2000,7 @@
         <div id="v8-confirm-attn" style="display:flex;align-items:center;gap:6px;padding:5px 20px 8px;font-size:12px;font-weight:500;color:#2c5282;opacity:0.9;">请确认评分无误后，手动点击浏览器弹出的「确认」按钮</div>`;
         document.body.prepend(bar);
 
-        const tag     = document.getElementById('edit-tag');
+        const tag = document.getElementById('edit-tag');
         const editLog = (msg, level = 'info') => { tag.textContent = msg; pushLog('[edit] ' + msg, level); };
         let stopped = false;
         document.getElementById('stop-btn').onclick = () => { stopped = true; editLog('已停止'); document.getElementById('stop-btn').style.display = 'none'; };
@@ -1896,13 +2011,13 @@
                 const key = courseKey(location.href), store = loadStore();
                 editLog('准备提交...');
                 if (stopped) return;
-                
+
                 // 提交模式下也要计算并显示当前总分
                 const { gkeys, groups } = collectGroups();
                 const total = calcCurrentTotal(gkeys, groups);
                 const totalDisplay = document.getElementById('v8-total-display');
                 if (totalDisplay) totalDisplay.textContent = `总分 ${total}`;
-                
+
                 ensureValueFields();
 
                 const doSubmit = () => {
