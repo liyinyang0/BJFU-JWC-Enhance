@@ -1231,6 +1231,9 @@
 
     // 延迟 1 秒执行初始化，确保教务系统原始 JS 框架加载完成
     setTimeout(init, 1000);
+
+    // 暴露 Logger 到全局，供模块二使用
+    window.__NJUST_LOGGER__ = Logger;
 })();
 
 // ================================================================
@@ -1274,6 +1277,7 @@
 
     /**
      * 推送新日志并更新面板
+     * 同时输出到模块一的 LogPanelUI（如果存在）
      */
     const pushLog = (msg, level = 'info') => {
         const logs = loadLogs();
@@ -1281,30 +1285,24 @@
         if (logs.length > MAX_LOG) logs.splice(0, logs.length - MAX_LOG);
         localStorage.setItem(KEY_LOG, JSON.stringify(logs));
         renderLogPanel();
+
+        // 同步输出到模块一的日志面板
+        if (window.__NJUST_LOGGER__) {
+            const levelMap = { debug: 4, info: 3, success: 3, warn: 2, error: 1 };
+            const loggerLevel = levelMap[level] || 3;
+            window.__NJUST_LOGGER__.log(loggerLevel, `[评教] ${msg}`);
+        }
     };
     const logInfo    = (m) => pushLog(m, 'info');
     const logSuccess = (m) => pushLog(m, 'success');
     const logError   = (m) => pushLog(m, 'error');
 
     /**
-     * 渲染控制面板底部的日志区域
+     * 渲染控制面板底部的日志区域（已简化，日志现在显示在模块一的面板中）
      */
     const renderLogPanel = () => {
-        const minP  = LOG_LEVELS[getMinLevel()] ?? 1;
-        const lines = loadLogs().filter(l => (LOG_LEVELS[l.level] ?? 1) >= minP);
-        const html  = lines.map(l => {
-            const level = l.level || 'info';
-            const icon  = LOG_ICONS[level] || '•';
-            const label = LOG_LABELS[level] || 'INF';
-            return `<div class="log-line log-${level}">` +
-                   `<span class="log-ts">${l.ts}</span>` +
-                   `<span class="log-lvl">${icon} ${label}</span>` +
-                   `<span class="log-msg">${esc(l.msg)}</span></div>`;
-        }).join('');
-        const el = document.getElementById('v80-log-content');
-        if (el) { el.innerHTML = html; el.scrollTop = el.scrollHeight; }
-        const sel = document.getElementById('log-level-sel');
-        if (sel) sel.value = getMinLevel();
+        // 日志现在统一显示在模块一的 LogPanelUI 中
+        // 此函数仅用于内部状态更新，不再渲染独立的日志区块
     };
 
     // ── 通用工具函数 ──────────────────────────────────────────────────
@@ -1437,9 +1435,6 @@
         const style = document.createElement('style');
         style.id = 'v80-style';
         style.textContent = `
-            /* 隐藏模块一的日志面板，避免重复显示 */
-            #njust-enhance-log { display: none !important; }
-
             /* 控制面板主容器 */
             #v80-panel {
                 position: fixed; top: 20px; right: 20px; width: 490px;
@@ -1494,19 +1489,8 @@
             .v80-sec-body { display: none; }
             .v80-sec-body.open { display: block; }
 
-            /* 日志行样式 */
-            #v80-log-content, #v80-storage-pre { max-height: 200px; overflow-y: auto; padding: 4px 0 10px; font-size: 11px; line-height: 1.6; font-family: 'SFMono-Regular', Consolas, monospace; background: #f7fafc; }
-            .log-line { padding: 3px 14px; border-bottom: 1px solid rgba(226, 232, 240, 0.4); display: flex; gap: 6px; align-items: flex-start; transition: background 0.1s; }
-            .log-line:hover { background: rgba(226, 232, 240, 0.6); }
-            .log-ts { color: #a0aec0; user-select: none; flex-shrink: 0; min-width: 54px; }
-            .log-lvl { font-weight: 700; flex-shrink: 0; min-width: 32px; text-align: center; border-radius: 3px; font-size: 10px; padding: 0 2px; }
-            .log-msg { color: #4a5568; word-break: break-all; flex: 1; }
-            .log-debug { background: rgba(159,122,234,0.05); } .log-debug .log-lvl { color: #9f7aea; background: rgba(159,122,234,0.1); }
-            .log-info { background: transparent; } .log-info .log-lvl { color: #3182ce; background: rgba(49,130,206,0.1); }
-            .log-success { background: rgba(72,187,120,0.05); } .log-success .log-lvl { color: #276749; background: rgba(72,187,120,0.1); }
-            .log-warn { background: rgba(237,137,54,0.05); } .log-warn .log-lvl { color: #c05621; background: rgba(237,137,54,0.1); }
-            .log-error { background: rgba(245,101,101,0.08); } .log-error .log-lvl { color: #c53030; background: rgba(245,101,101,0.15); }
-            .log-level-select { font-size: 11px; padding: 1px 5px; border-radius: 4px; background: #fff; color: #4a5568; border: 1px solid #cbd5e0; cursor: pointer; }
+            /* Storage 预览样式 */
+            #v80-storage-pre { max-height: 200px; overflow-y: auto; padding: 4px 10px; font-size: 11px; line-height: 1.6; font-family: 'SFMono-Regular', Consolas, monospace; background: #f7fafc; }
             .v80-value-chip { display: inline-block; margin-left: 6px; font-size: 11px; color: #4a5568; }
         `;
         document.head.appendChild(style);
@@ -1527,20 +1511,6 @@
             </div>
             <div id="v80-action-bar">${actionBarHtml}</div>
             <div id="v80-body">${bodyHtml}</div>
-            <div class="v80-section">
-                <div class="v80-sec-hd" id="log-hd">
-                    <span class="lbl">📋 运行日志</span>
-                    <select id="log-level-sel" class="log-level-select">
-                        <option value="debug">DEBUG+</option>
-                        <option value="info" selected>INFO+</option>
-                        <option value="success">OK+</option>
-                        <option value="warn">WARN+</option>
-                        <option value="error">ERROR</option>
-                    </select>
-                    <span class="arr" id="log-arr">▴</span>
-                </div>
-                <div class="v80-sec-body open" id="v80-log-content"></div>
-            </div>
             <div class="v80-section">
                 <div class="v80-sec-hd" id="store-hd">
                     <span class="lbl">🗄 Storage 原始数据</span>
@@ -1563,10 +1533,6 @@
             closeBtn.addEventListener('mouseenter', () => closeBtn.style.backgroundColor = '#e2e8f0');
             closeBtn.addEventListener('mouseleave', () => closeBtn.style.backgroundColor = 'transparent');
         }
-        // 日志区块折叠
-        const logBody = document.getElementById('v80-log-content'), logArr = document.getElementById('log-arr');
-        document.getElementById('log-hd').onclick = () => { logBody.classList.toggle('open'); logArr.textContent = logBody.classList.contains('open') ? '▴' : '▾'; };
-        document.getElementById('log-level-sel').addEventListener('change', (e) => { e.stopPropagation(); setMinLevel(e.target.value); });
         // 存储预览区块折叠
         const storeBody = document.getElementById('store-body'), storeArr = document.getElementById('store-arr');
         document.getElementById('store-hd').onclick = () => { storeBody.classList.toggle('open'); storeArr.textContent = storeBody.classList.contains('open') ? '▴' : '▾'; if (storeBody.classList.contains('open')) renderStoragePanel(); };
@@ -1588,7 +1554,6 @@
         };
         document.onmouseup = () => { drag = false; };
 
-        renderLogPanel();
         return panel;
     };
 
@@ -1632,7 +1597,7 @@
             `<div id="entry-list"></div>`
         );
         // 初始化布局调整
-        (function(){const p=document.getElementById('v80-panel');if(p)p.classList.add('wide');const lg=document.getElementById('v80-log-content');const arr=document.getElementById('log-arr');if(lg)lg.classList.remove('open');if(arr)arr.textContent='▾';})();
+        (function(){const p=document.getElementById('v80-panel');if(p)p.classList.add('wide');})();
 
         /**
          * 渲染各类别入口的卡片及完成进度
@@ -1670,7 +1635,7 @@
             });
         };
 
-        window.addEventListener('storage', () => { renderEntries(); renderLogPanel(); });
+        window.addEventListener('storage', () => { renderEntries(); });
         renderEntries();
     }
 
@@ -1827,7 +1792,7 @@
 
         // 跨页面状态监听：当其他窗口修改了 busy 标志或完成状态时，本页面及时响应并触发下一步
         window.addEventListener('storage', (e) => {
-            if ([KEY_STORE, KEY_BUSY, KEY_RUNNING].includes(e.key)) { renderList(); renderLogPanel(); if (e.key === KEY_BUSY && e.newValue === 'false' && localStorage.getItem(KEY_RUNNING) === 'true') setTimeout(execNext, 800); }
+            if ([KEY_STORE, KEY_BUSY, KEY_RUNNING].includes(e.key)) { renderList(); if (e.key === KEY_BUSY && e.newValue === 'false' && localStorage.getItem(KEY_RUNNING) === 'true') setTimeout(execNext, 800); }
             if (e.key === KEY_SUBBSY && e.newValue === 'false' && localStorage.getItem(KEY_SUBRUN) === 'true') setTimeout(execNextSubmit, 800);
         });
 
