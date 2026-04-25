@@ -1606,7 +1606,7 @@
         };
 
         buildPanel(
-            '🎓 自动评教助手 V1',
+            '🎓 南理工教务增强助手 V2',
             `
                 <div id="v80-usage" style="font-size:13px;line-height:1.75;padding:14px 16px;border:1px solid #cbd5e0;border-radius:10px;background:#f7fafc;color:#2d3748;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
                     <div style="font-weight:800;margin-bottom:8px;font-size:14px;">新手使用指南</div>
@@ -1673,7 +1673,7 @@
     // ── LIST 页面 (课程列表页) ────────────────────────────────────────
     if (location.href.includes('xspj_list.do')) {
         buildPanel(
-            '🎓 自动评教助手',
+            '🎓 南理工教务增强助手 V2',
             `
                 <div id="v80-submit-hint"></div>
                 <div class="btn-row">
@@ -1852,7 +1852,7 @@
                 bar.id = 'v80-manual-bar';
                 bar.style.cssText = 'position:sticky;top:0;left:0;width:100%;z-index:99999;box-sizing:border-box;background:#ebf8ff;border-bottom:2px solid #90cdf4;color:#2c5282;padding:10px 18px;font-family:sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.08);';
                 bar.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <span style="font-weight:700;font-size:13px;">🎓 评教助手 V1</span>
+                    <span style="font-weight:700;font-size:13px;">🎓 南理工教务增强助手 V2</span>
                     <span style="font-size:11px;padding:2px 9px;border-radius:7px;background:#edf2f7;color:#718096;border:1px solid #cbd5e0;">手动模式</span>
                     <span style="font-size:12px;color:#4a5568;">快捷填分：</span>
                     <button id="v8-fill-highest" class="vb vb-outline vb-mini">最高分</button>
@@ -1906,7 +1906,7 @@
         const bar = document.createElement('div');
         bar.style.cssText = `position:sticky;top:0;left:0;width:100%;z-index:99999;box-sizing:border-box;background:${bgColor};color:${textColor};border-bottom:2px solid ${bdColor};box-shadow:0 2px 8px rgba(0,0,0,0.08);font-family:sans-serif;`;
         bar.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 20px;">
-            <span style="font-weight:700;font-size:13px;">🎓 评教助手 V1</span>
+            <span style="font-weight:700;font-size:13px;">🎓 南理工教务增强助手 V2</span>
             <span style="font-size:11px;padding:2px 10px;border-radius:8px;background:rgba(255,255,255,0.5);border:1px solid ${bdColor};">${modeName}</span>
             <span id="edit-tag" style="font-size:11px;padding:2px 10px;border-radius:8px;background:rgba(0,0,0,0.06);border:1px solid ${bdColor};">初始化...</span>
             <span id="v8-total-display" style="font-size:17px;font-weight:800;color:${textColor};padding:1px 10px;border-radius:6px;border:1px solid ${bdColor};background:#fff;">总分 0</span>
