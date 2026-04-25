@@ -457,11 +457,8 @@
                 display: flex; justify-content: space-between; align-items: center;
                 border-bottom: 1px solid rgba(255,255,255,0.2);">
                 <div style="color: white; font-weight: bold; font-size: 18px;">🎓 ${title}</div>
-                <span style="cursor: pointer; color: rgba(255,255,255,0.8); font-size: 18px;
-                    padding: 2px 6px; border-radius: 4px; transition: background-color 0.2s;"
-                    onclick="this.closest('div').parentElement.remove()"
-                    onmouseover="this.style.backgroundColor='rgba(255,255,255,0.2)'"
-                    onmouseout="this.style.backgroundColor='transparent'">✕</span>
+                <span id="closeModalBtn" style="cursor: pointer; color: rgba(255,255,255,0.8); font-size: 18px;
+                    padding: 2px 6px; border-radius: 4px; transition: background-color 0.2s;">✕</span>
             </div>
             <div style="background: white; padding: 25px;">
                 ${content}
@@ -495,6 +492,15 @@
 
         addDragFunctionality(container);
         document.body.appendChild(container);
+
+        // 绑定关闭按钮事件
+        const closeBtn = container.querySelector('#closeModalBtn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => container.remove());
+            closeBtn.addEventListener('mouseenter', () => closeBtn.style.backgroundColor = 'rgba(255,255,255,0.2)');
+            closeBtn.addEventListener('mouseleave', () => closeBtn.style.backgroundColor = 'transparent');
+        }
+
         return container;
     }
 
@@ -726,11 +732,8 @@
                     <div style="color: #333; font-weight: 600; font-size: 17px; letter-spacing: 1px;">
                         🎓 南理工教务增强助手
                     </div>
-                    <span style="cursor: pointer; color: #888; font-size: 18px;
-                        padding: 2px 8px; border-radius: 4px; transition: background-color 0.2s;"
-                        onclick="this.closest('div').parentElement.remove()"
-                        onmouseover="this.style.backgroundColor='#e0e0e0'"
-                        onmouseout="this.style.backgroundColor='transparent'">✕</span>
+                    <span id="creditCloseBtn" style="cursor: pointer; color: #888; font-size: 18px;
+                        padding: 2px 8px; border-radius: 4px; transition: background-color 0.2s;">✕</span>
                 </div>
                 <div style="background: #fff; padding: 18px 22px 10px 22px; max-height: 540px; overflow-y: auto;">
                     <div id="creditSummary"></div>
@@ -788,6 +791,15 @@
             }
 
             document.body.appendChild(container);
+
+            // 绑定关闭按钮事件
+            const creditCloseBtn = container.querySelector('#creditCloseBtn');
+            if (creditCloseBtn) {
+                creditCloseBtn.addEventListener('click', () => container.remove());
+                creditCloseBtn.addEventListener('mouseenter', () => creditCloseBtn.style.backgroundColor = '#e0e0e0');
+                creditCloseBtn.addEventListener('mouseleave', () => creditCloseBtn.style.backgroundColor = 'transparent');
+            }
+
             Logger.debug('学分统计弹窗创建完成');
             return container;
         } catch (e) {
@@ -1641,8 +1653,16 @@
                 card.innerHTML = `<span class="entry-label">${esc(entry.label)}</span>` +
                     (totalN ? `<span class="entry-count">${doneN}/${totalN}</span>` : '') +
                     `<span class="${isCur ? 'entry-st-run' : allDone ? 'entry-st-done' : 'entry-st-wait'}">${isCur ? '▶ 运行中' : allDone ? '✓ 已完成' : '等待中'}</span>` +
-                    `<button class="vb vb-outline vb-mini" onclick="window.location.href='${esc(entry.url)}'">进入</button>`;
+                    `<button class="vb vb-outline vb-mini entry-enter-btn" data-url="${esc(entry.url)}">进入</button>`;
                 box.appendChild(card);
+            });
+
+            // 绑定"进入"按钮点击事件
+            box.querySelectorAll('.entry-enter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const url = btn.getAttribute('data-url');
+                    if (url) window.location.href = url;
+                });
             });
         };
 
@@ -1735,12 +1755,20 @@
                     `<span class="ci-teacher">${esc(c.teacher)}</span>` +
                     (c.zpf ? `<span class="ci-zpf">${esc(c.zpf)}分</span>` : '') +
                     `<span class="${stClass}">${stLabel}</span>` +
-                    `<button class="vb vb-outline vb-mini" onclick="event.stopPropagation();window.open('${esc(c.rawUrl)}','_blank','width=1200,height=800')">查看</button>`;
+                    `<button class="vb vb-outline vb-mini course-view-btn" data-url="${esc(c.rawUrl)}">查看</button>`;
                 box.appendChild(el);
             });
             // 绑定勾选框事件，更新存储
             document.querySelectorAll('.course-ck').forEach(ck => {
                 ck.onchange = (e) => { const k = e.target.getAttribute('data-key'); store[k].auto = e.target.checked; saveStore(store); updateSubmitBtn(); setTimeout(() => renderList(), 0); };
+            });
+            // 绑定"查看"按钮点击事件
+            box.querySelectorAll('.course-view-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const url = btn.getAttribute('data-url');
+                    if (url) window.open(url, '_blank', 'width=1200,height=800');
+                });
             });
             saveStore(store);
             updateSubmitBtn();
