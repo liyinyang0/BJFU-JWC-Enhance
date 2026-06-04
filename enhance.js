@@ -1,17 +1,14 @@
 // ==UserScript==
-// @name         南理工教务增强助手 V2 | 支持自动评教
+// @name         北林教务增强助手 V1 | 支持自动评教
 // @namespace    http://tampermonkey.net/
-// @version      2.0.1.3
+// @version      1.0.0.0
 // @description  在合适的地方显示课程大纲、选修课类别及选修课学分情况，并自动刷新登录状态。同时支持自动评教与批量提交。
-// @match        http://202.119.81.112/*
-// @match        http://bkjw.njust.edu.cn/*
-// @match        http://202.119.81.112:9080/*
-// @match        http://202.119.81.113:9080/*
+// @match        http://newjwxt.bjfu.edu.cn/*
+// @match        https://newjwxt.bjfu.edu.cn/*
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @connect      jsdelivr.net
-// @connect      njust.wiki
-// @author       Light
+// @author       Light (adapted for BFU)
 // @license      MIT
 // @supportURL   https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance
 // ==/UserScript==
@@ -32,20 +29,18 @@
      */
 
     // 选修课类别数据源（JSON 格式）
+    // TODO: 需要为北林课程重新采集数据。当前使用 NJUST 数据作为占位。
     const CATEGORY_URLS = [
-        'https://enhance.njust.store/data/xxk.json',
-        'https://enhance.njust.wiki/data/xxk.json',                                                               // 官方主节点
-        'https://fastly.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/xxk.json',                        // jsDelivr 全球加速
-        'https://testingcf.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/xxk.json',                    // jsDelivr Cloudflare
+        'https://fastly.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/xxk.json',                        // jsDelivr 全球加速（NJUST数据占位）
+        'https://testingcf.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/xxk.json',                    // jsDelivr Cloudflare（NJUST数据占位）
         'https://raw.githubusercontent.com/NJUST-OpenLib/NJUST-JWC-Enhance/refs/heads/main/data/xxk.json'             // GitHub 原始文件（备用）
     ];
 
     // 课程大纲索引数据源（包含课程代码到 jx02id 的映射）
+    // TODO: 需要为北林课程重新采集数据。当前使用 NJUST 数据作为占位。
     const OUTLINE_URLS = [
-        'https://enhance.njust.store/data/kcdg.json',
-        'https://enhance.njust.wiki/data/kcdg.json',                                                               // 官方主节点
-        'https://fastly.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/kcdg.json',                        // jsDelivr 全球加速
-        'https://testingcf.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/kcdg.json',                    // jsDelivr Cloudflare
+        'https://fastly.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/kcdg.json',                        // jsDelivr 全球加速（NJUST数据占位）
+        'https://testingcf.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/kcdg.json',                    // jsDelivr Cloudflare（NJUST数据占位）
         'https://raw.githubusercontent.com/NJUST-OpenLib/NJUST-JWC-Enhance/refs/heads/main/data/kcdg.json'             // GitHub 原始文件（备用）
     ];
 
@@ -74,7 +69,7 @@
     const CACHE_CONFIG = {
         enabled: true,
         ttl: 86400,                   // 缓存有效期：（单位：秒）
-        prefix: 'njust_jwc_enhance_'  // 本脚本专用的缓存键名前缀
+        prefix: 'bjfu_jwc_enhance_'  // 本脚本专用的缓存键名前缀
     };
 
     /**
@@ -102,26 +97,26 @@
             const style = document.createElement('style');
             style.textContent = `
                 /* 面板主样式 */
-                #njust-enhance-log {
-                    position: fixed; bottom: 0; right: 20px; width: 380px;
+                #bjfu-enhance-log {
+                    position: fixed; bottom: 0; left: 20px; width: 320px;
                     background: #fff; border: 1px solid #e2e8f0; border-bottom: none;
                     border-radius: 10px 10px 0 0; box-shadow: 0 -2px 15px rgba(0,0,0,0.08);
                     z-index: 10001; font-family: 'SFMono-Regular', Consolas, monospace;
                     display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 }
-                #njust-enhance-log.minimized { transform: translateY(calc(100% - 38px)); }
+                #bjfu-enhance-log.minimized { transform: translateY(calc(100% - 38px)); }
 
                 /* 标题栏样式 */
-                #njust-enhance-log-hd {
+                #bjfu-enhance-log-hd {
                     padding: 10px 15px; background: #f7fafc; border-bottom: 1px solid #e2e8f0;
                     cursor: pointer; display: flex; align-items: center; justify-content: space-between;
                     border-radius: 10px 10px 0 0; user-select: none; gap: 10px;
                 }
-                #njust-enhance-log-hd b { font-size: 13px; color: #2d3748; display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+                #bjfu-enhance-log-hd b { font-size: 13px; color: #2d3748; display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
                 #nel-status-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; }
 
                 /* 日志列表样式 */
-                #njust-enhance-log-body {
+                #bjfu-enhance-log-body {
                     height: 220px; overflow-y: auto; background: #fdfdfd; font-size: 11px;
                     padding: 4px 0; scroll-behavior: smooth;
                 }
@@ -146,26 +141,26 @@
             document.head.appendChild(style);
 
             this.container = document.createElement('div');
-            this.container.id = 'njust-enhance-log';
+            this.container.id = 'bjfu-enhance-log';
             this.container.className = 'minimized';
             this.container.innerHTML = `
-                <div id="njust-enhance-log-hd">
-                    <b><span id="nel-status-text">南理工教务增强助手 V2</span></b>
+                <div id="bjfu-enhance-log-hd">
+                    <b><span id="nel-status-text">北林教务增强助手 V1</span></b>
                     <span id="nel-clear-btn" class="nel-btn nel-clear" title="清空日志">清空</span>
-                    <span id="njust-log-toggle" class="nel-btn">展开 ▴</span>
+                    <span id="bjfu-log-toggle" class="nel-btn">展开 ▴</span>
                 </div>
-                <div id="njust-enhance-log-body"></div>
+                <div id="bjfu-enhance-log-body"></div>
             `;
             document.body.appendChild(this.container);
-            this.body = this.container.querySelector('#njust-enhance-log-body');
+            this.body = this.container.querySelector('#bjfu-enhance-log-body');
 
             this.initialized = true;
 
             // 绑定交互事件
-            this.container.querySelector('#njust-enhance-log-hd').onclick = (e) => {
+            this.container.querySelector('#bjfu-enhance-log-hd').onclick = (e) => {
                 if (e.target.id === 'nel-clear-btn') return;
                 const isMin = this.container.classList.toggle('minimized');
-                this.container.querySelector('#njust-log-toggle').textContent = isMin ? '展开 ▴' : '折叠 ▾';
+                this.container.querySelector('#bjfu-log-toggle').textContent = isMin ? '展开 ▴' : '折叠 ▾';
             };
 
             this.container.querySelector('#nel-clear-btn').onclick = (e) => {
@@ -229,7 +224,7 @@
                 // 恢复默认状态文字
                 const statusText = this.container && this.container.querySelector('#nel-status-text');
                 if (statusText) {
-                    statusText.textContent = '南理工教务增强助手 V2';
+                    statusText.textContent = '北林教务增强助手 V1';
                     statusText.style.color = '#2d3748';
                 }
                 return;
@@ -264,7 +259,7 @@
             const lvlName = levelNames[level] || 'info';
 
             // 控制台原生输出
-            console.log(`[${timestamp}] [南理工教务助手]`, message, ...args);
+            console.log(`[${timestamp}] [北林教务助手]`, message, ...args);
 
             // 格式化对象参数，使其在 UI 面板中可见
             let displayMessage = message;
@@ -406,7 +401,7 @@
         }
         setTimeout(() => {
             try {
-                Logger.info('南理工教务增强助手已启动', {
+                Logger.info('北林教务增强助手已启动', {
                     debug: DEBUG_CONFIG.enabled ? `Level ${DEBUG_CONFIG.level}` : '关闭',
                     cache: CACHE_CONFIG.enabled ? `TTL ${CACHE_CONFIG.ttl}s` : '关闭'
                 });
@@ -426,7 +421,7 @@
     function initializePromoBanner() {
         const tryShow = () => {
             // 检查是否已存在
-            if (document.getElementById('njust-promo-line')) return true;
+            if (document.getElementById('bjfu-promo-line')) return true;
 
             // 检查两种版权信息结构
             const footer = document.getElementById('Footer1_divCopyright');
@@ -473,11 +468,11 @@
 
     // ==================== 统一弹窗 ====================
     function createUnifiedModal(title, content, type = 'info') {
-        const existingModal = document.getElementById('njustAssistantModal');
+        const existingModal = document.getElementById('bjfuAssistantModal');
         if (existingModal) existingModal.remove();
 
         const container = document.createElement('div');
-        container.id = 'njustAssistantModal';
+        container.id = 'bjfuAssistantModal';
 
         // Apple 风格主题色彩配置
         const themeConfig = {
@@ -495,7 +490,7 @@
             box-shadow: 0 24px 80px rgba(0,0,0,0.18), 0 0 0 0.5px rgba(0,0,0,0.08);
             z-index: 10000; min-width: 340px; max-width: 460px;
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
-            overflow: hidden; animation: njustFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden; animation: bjfuFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         `;
 
         container.innerHTML = `
@@ -519,7 +514,7 @@
             </div>
             <div style="padding: 16px 28px 22px 28px; background: #f5f5f7; border-top: 1px solid #e5e5ea;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                    <a href="https://enhance.njust.wiki" target="_blank"
+                    <a href="https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance" target="_blank"
                         style="color: ${theme.accent}; text-decoration: none; font-weight: 500; font-size: 14px;">
                         查看使用说明
                     </a>
@@ -535,11 +530,11 @@
             </div>
         `;
 
-        if (!document.getElementById('njustAssistantStyles')) {
+        if (!document.getElementById('bjfuAssistantStyles')) {
             const style = document.createElement('style');
-            style.id = 'njustAssistantStyles';
+            style.id = 'bjfuAssistantStyles';
             style.textContent = `
-                @keyframes njustFadeIn {
+                @keyframes bjfuFadeIn {
                     from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
                     to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
                 }
@@ -623,23 +618,23 @@
                         </div>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <a href="http://202.119.81.113:8080/" target="_blank" style="
+                        <a href="http://newjwxt.bjfu.edu.cn/" target="_blank" style="
                             display: flex; align-items: center; justify-content: center;
                             background: #007AFF; color: white;
                             padding: 13px 20px; text-decoration: none; border-radius: 12px;
                             font-weight: 500; font-size: 15px; text-align: center;
                             transition: background 0.15s;"
                             onmouseover="this.style.background='#0066d6'" onmouseout="this.style.background='#007AFF'">
-                            教务处登录入口
+                            北林新教务系统
                             <span style="margin-left: 8px; font-size: 11px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 6px;">推荐</span>
                         </a>
-                        <a href="https://www.njust.edu.cn/" target="_blank" style="
+                        <a href="http://202.204.121.135/jwxt/Index.htm" target="_blank" style="
                             display: block; background: #f5f5f7; color: #1d1d1f;
                             padding: 13px 20px; text-decoration: none; border-radius: 12px;
                             font-weight: 500; font-size: 15px; text-align: center;
                             border: 1px solid #d2d2d7; transition: background 0.15s;"
                             onmouseover="this.style.background='#e8e8ed'" onmouseout="this.style.background='#f5f5f7'">
-                            智慧理工登录入口
+                            北林旧教务系统
                         </a>
                     </div>
                     <div style="margin-top: 18px; padding: 14px; background: #f5f5f7; border-radius: 10px;">
@@ -649,7 +644,7 @@
                         </div>
                     </div>
                 `;
-                try { createUnifiedModal('南理工教务增强助手 V2', content, 'warning'); }
+                try { createUnifiedModal('北林教务增强助手 V1', content, 'warning'); }
                 catch (e) { Logger.error('创建强智科技页面提示弹窗失败:', e); }
                 return true;
             }
@@ -663,7 +658,7 @@
     // ==================== 梨课程推荐提示 ====================
     function showPromoBanner() {
         // 检查是否已存在
-        if (document.getElementById('njust-promo-line')) return;
+        if (document.getElementById('bjfu-promo-line')) return;
 
         // 查找底部版权信息区域（支持两种页面结构）
         let insertTarget = null;
@@ -688,7 +683,7 @@
 
         // 创建推荐文本行（纯文本样式，与页面风格融合）
         const promoLine = document.createElement('div');
-        promoLine.id = 'njust-promo-line';
+        promoLine.id = 'bjfu-promo-line';
         if (!isLoginPage) {
             promoLine.className = 'Nsb_pw';
         }
@@ -700,14 +695,10 @@
         `;
 
         promoLine.innerHTML = `
-            <strong>推荐：</strong>尝试最新开发，支持本科生/研究生的 <strong>梨课程</strong>。
-            可以在<a href="https://github.com/simpleClover/NJUSTSchedule/releases/latest" target="_blank"
-                style="color: #007bff; text-decoration: none;">GitHub 下载</a> 或
-            <a href="https://course-cdn.njust.store/?dir=/NJUSTSchedule/releases/download" target="_blank"
-                style="color: #007bff; text-decoration: none;">CDN 下载</a>
-            <span style="font-size: 11px; color: #888;">(Android/HarmonyOS)</span>，IOS/PC 用户也可使用
-            <a href="https://Course.njust.store" target="_blank"
-                style="color: #007bff; text-decoration: none;">网页版</a>。
+            <strong>提示：</strong>欢迎使用<strong>北林教务增强助手</strong>。
+            此脚本在本地运行，不会上传任何数据。如有问题请访问
+            <a href="https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance" target="_blank"
+                style="color: #007bff; text-decoration: none;">GitHub 项目页</a>。
 
         `;
 
@@ -845,7 +836,7 @@
                     display: flex; justify-content: space-between; align-items: center;
                     border-bottom: 1px solid #e0e0e0;">
                     <div style="color: #333; font-weight: 600; font-size: 17px; letter-spacing: 1px;">
-                        🎓 南理工教务增强助手 V2
+                        🎓 北林教务增强助手 V1
                     </div>
                     <span id="creditCloseBtn" style="cursor: pointer; color: #888; font-size: 18px;
                         padding: 2px 8px; border-radius: 4px; transition: background-color 0.2s;">✕</span>
@@ -858,7 +849,7 @@
                         <li>选修课类别统计仅包含已知分类的通识教育选修课</li>
                         <li>课程分类信息可能随时更新，请以教务处最新通知为准</li>
                         <div style="margin-bottom: 8px;">
-                            <span>请查看 <a href="https://enhance.njust.wiki" target="_blank"
+                            <span>请查看 <a href="https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance" target="_blank"
                                 style="color: #007bff; text-decoration: none;">增强助手官网</a> 获取使用说明</span>
                         </div>
                     </div>
@@ -936,10 +927,10 @@
             tables.forEach(table => {
                 table.querySelectorAll('tr').forEach(row => {
                     const tds = row.querySelectorAll('td');
-                    if (tds.length < 11) return;
+                    if (tds.length < 12) return;
                     const courseCode = tds[2].textContent.trim();
-                    const credit = parseFloat(tds[6].textContent) || 0;
-                    const courseType = tds[10].textContent.trim();
+                    const credit = parseFloat(tds[5].textContent) || 0;
+                    const courseType = tds[7].textContent.trim();
 
                     const categoryDiv = tds[2].querySelector('[data-category-inserted]');
                     let category = null;
@@ -1016,17 +1007,15 @@
         try {
             const tables = document.querySelectorAll('table');
             // 页面类型识别
-            const isGradePage = window.location.pathname.includes('/njlgdx/kscj/cjcx_list');
+            const isGradePage = window.location.pathname.includes('/jsxsd/kscj/cjcx_list');
             const isSchedulePage = window.location.pathname.includes('xskb_list.do') &&
                 document.title.includes('学期理论课表');
-            const isSmartCampus = window.location.href.includes('bkjw.njust.edu.cn');
-
+            // 北林课表页面使用日历格状布局，没有需要处理的表格数据
+            if (isSchedulePage) return;
             let processedTables = 0, processedRows = 0, enhancedCourses = 0;
 
             tables.forEach(table => {
                 try {
-                    // 课表页面只处理 id 为 dataList 的主表格
-                    if (isSchedulePage && table.id !== 'dataList') return;
                     const rows = table.querySelectorAll('tr');
                     processedTables++;
 
@@ -1098,19 +1087,12 @@
                                     outlineDiv.setAttribute('data-outline-inserted', '1');
                                     outlineDiv.style.marginTop = '4px';
 
-                                    if (isSmartCampus) {
-                                        // 智慧理工平台因跨域和权限限制，无法直接预览官网大纲
-                                        outlineDiv.textContent = '⚠️ 课程大纲功能受限';
-                                        outlineDiv.style.color = '#ff9800';
-                                        outlineDiv.style.fontWeight = 'bold';
-                                        outlineDiv.style.cursor = 'pointer';
-                                        outlineDiv.title = '当前使用智慧理工平台，课程大纲功能受限。请访问教务处官网获取完整功能';
-                                    } else {
+                                    {
                                         const realId = courseOutlineMap[courseCode];
                                         if (realId) {
                                             const link = document.createElement('a');
-                                            // 拼接教务处官网预览链接
-                                            link.href = `http://202.119.81.112:8080/kcxxAction.do?method=kcdgView&jx02id=${realId}&isentering=0`;
+                                            // 拼接教务处官网预览链接（北林使用 newjwxt.bjfu.edu.cn）
+                                            link.href = `http://newjwxt.bjfu.edu.cn/kcxxAction.do?method=kcdgView&jx02id=${realId}&isentering=0`;
                                             link.textContent = '📘 查看课程大纲';
                                             link.target = '_blank';
                                             link.style.color = '#0077cc';
@@ -1174,14 +1156,14 @@
         const currentUrl = window.location.href;
         try {
             let baseUrl;
-            if (currentUrl.includes('njlgdx/')) {
-                baseUrl = currentUrl.substring(0, currentUrl.indexOf('njlgdx/'));
+            if (currentUrl.includes('jsxsd/')) {
+                baseUrl = currentUrl.substring(0, currentUrl.indexOf('jsxsd/'));
             } else {
                 const urlObj = new URL(currentUrl);
                 baseUrl = `${urlObj.protocol}//${urlObj.host}/`;
             }
             // 使用“课程大纲查询”作为刷新页面（权限要求低且加载快）
-            const refreshUrl = baseUrl + 'njlgdx/pyfa/kcdgxz';
+            const refreshUrl = baseUrl + 'jsxsd/pyfa/kcdgxz';
             Logger.info('使用隐藏 iframe 刷新登录状态:', refreshUrl);
 
             const iframe = document.createElement('iframe');
@@ -1213,9 +1195,9 @@
     function autoRefreshLoginStatus() {
         try {
             const currentUrl = window.location.href;
-            if (!currentUrl.includes('njlgdx/framework/main.jsp')) return;
+            if (!currentUrl.includes('jsxsd/framework/xsMain.jsp')) return;
 
-            const lastRefreshKey = 'njust_last_login_refresh';
+            const lastRefreshKey = 'bjfu_last_login_refresh';
             const lastRefreshTime = localStorage.getItem(lastRefreshKey);
             const now = Date.now();
             const refreshInterval = 5 * 60 * 1000; // 5分钟间隔
@@ -1230,7 +1212,7 @@
 
             // fix⑦: 使用 BroadcastChannel 通知其他同源标签页同步刷新时间，避免多标签页并发请求
             if (typeof BroadcastChannel !== 'undefined') {
-                const bc = new BroadcastChannel('njust_login_refresh');
+                const bc = new BroadcastChannel('bjfu_login_refresh');
                 bc.postMessage({ type: 'refreshing', ts: now });
                 bc.close();
             }
@@ -1256,10 +1238,6 @@
             }
 
             const currentUrl = window.location.href;
-            const isSmartCampus = currentUrl.includes('bkjw.njust.edu.cn');
-            if (isSmartCampus) {
-                Logger.warn('检测到智慧理工平台，课程大纲功能将受限');
-            }
 
             // 1. 登录保活与状态检查
             autoRefreshLoginStatus();
@@ -1276,7 +1254,7 @@
             Logger.info('数据加载完成，构建映射表');
             buildCourseMaps(categoryData, outlineData);
 
-            if (window.location.pathname.includes('/njlgdx/kscj/cjcx_list')) {
+            if (window.location.pathname.includes('/jsxsd/kscj/cjcx_list')) {
                 createCreditSummaryWindow();
             }
 
@@ -1338,7 +1316,7 @@
                 Logger.error('启动页面变化监听器失败:', e);
             }
 
-            Logger.info('南理工教务增强助手加载成功！');
+            Logger.info('北林教务增强助手加载成功！');
         } catch (err) {
             Logger.error('初始化失败:', err);
         }
@@ -1348,7 +1326,7 @@
     setTimeout(init, 1000);
 
     // 暴露 Logger 到全局，供模块二使用
-    window.__NJUST_LOGGER__ = Logger;
+    window.__BJFU_LOGGER__ = Logger;
 })();
 
 // ================================================================
@@ -1362,16 +1340,16 @@
 
     // ── 常量定义 ─────────────────────────────────────────────────────
     // 存储键名，用于跨页面同步状态
-    const KEY_STORE = 'njust_eval_v1_store';    // 核心存储：课程状态、评分选项等
-    const KEY_RUNNING = 'njust_eval_running';     // 全局标志：是否处于“开始评价并保存”流水线中
-    const KEY_BUSY = 'njust_eval_busy';        // 互斥锁：防止多个窗口同时执行保存操作
-    const KEY_QUEUE = 'njust_eval_queue';       // 队列：待处理的类别 URL 列表
-    const KEY_CURLIST = 'njust_eval_curlist';     // 当前正在处理的类别 URL
-    const KEY_LOG = 'njust_eval_log';         // 日志存储
-    const KEY_LOGLVL = 'njust_eval_loglvl';      // 日志显示等级过滤
-    const KEY_SUBQUEUE = 'njust_eval_subqueue';    // 待提交课程的 URL 队列
-    const KEY_SUBRUN = 'njust_eval_subrun';      // 全局标志：是否处于“提交已评课程”流水线中
-    const KEY_SUBBSY = 'njust_eval_subbsy';      // 互斥锁：防止多个窗口同时执行提交操作
+    const KEY_STORE = 'bjfu_eval_v1_store';    // 核心存储：课程状态、评分选项等
+    const KEY_RUNNING = 'bjfu_eval_running';     // 全局标志：是否处于“开始评价并保存”流水线中
+    const KEY_BUSY = 'bjfu_eval_busy';        // 互斥锁：防止多个窗口同时执行保存操作
+    const KEY_QUEUE = 'bjfu_eval_queue';       // 队列：待处理的类别 URL 列表
+    const KEY_CURLIST = 'bjfu_eval_curlist';     // 当前正在处理的类别 URL
+    const KEY_LOG = 'bjfu_eval_log';         // 日志存储
+    const KEY_LOGLVL = 'bjfu_eval_loglvl';      // 日志显示等级过滤
+    const KEY_SUBQUEUE = 'bjfu_eval_subqueue';    // 待提交课程的 URL 队列
+    const KEY_SUBRUN = 'bjfu_eval_subrun';      // 全局标志：是否处于“提交已评课程”流水线中
+    const KEY_SUBBSY = 'bjfu_eval_subbsy';      // 互斥锁：防止多个窗口同时执行提交操作
 
     // URL 参数，用于传递指令给详情页
     const PARAM_AUTO = 'isAutoEval';             // 详情页接收后执行自动填分+保存
@@ -1402,10 +1380,10 @@
         renderLogPanel();
 
         // 同步输出到模块一的日志面板
-        if (window.__NJUST_LOGGER__) {
+        if (window.__BJFU_LOGGER__) {
             const levelMap = { debug: 4, info: 3, success: 3, warn: 2, error: 1 };
             const loggerLevel = levelMap[level] || 3;
-            window.__NJUST_LOGGER__.log(loggerLevel, `[评教] ${msg}`);
+            window.__BJFU_LOGGER__.log(loggerLevel, `[评教] ${msg}`);
         }
     };
     const logInfo = (m) => pushLog(m, 'info');
@@ -1690,7 +1668,7 @@
         };
 
         buildPanel(
-            '🎓 南理工教务增强助手 V2',
+            '🎓 北林教务增强助手 V1',
             `
                 <div id="v80-usage" style="font-size:13px;line-height:1.75;padding:14px 16px;border:1px solid #cbd5e0;border-radius:10px;background:#f7fafc;color:#2d3748;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
                     <div style="font-weight:800;margin-bottom:8px;font-size:14px;">新手使用指南</div>
@@ -1704,7 +1682,7 @@
                         <div style="color:#FF6347;font-weight:700;">出现问题可使用“重置缓存（清除状态）”按钮重置进度</div>
                         <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #cbd5e0;display:flex;align-items:center;">
                             <span style="flex:1;color:#4a5568;font-size:12px;">查看更多使用说明请点击>>>>></span>
-                            <a href="https://enhance.njust.wiki" target="_blank" class="vb vb-outline vb-mini" style="text-decoration:none;">增强助手官网</a>
+                            <a href="https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance" target="_blank" class="vb vb-outline vb-mini" style="text-decoration:none;">增强助手官网</a>
                         </div>
                     </div>
                 </div>
@@ -1757,7 +1735,7 @@
     // ── LIST 页面 (课程列表页) ────────────────────────────────────────
     if (location.href.includes('xspj_list.do')) {
         buildPanel(
-            '🎓 南理工教务增强助手 V2',
+            '🎓 北林教务增强助手 V1',
             `
                 <div id="v80-submit-hint"></div>
                 <div class="btn-row">
@@ -1769,7 +1747,7 @@
                     <button id="clear-log-btn" class="vb vb-danger" style="flex:1">清空日志</button>
                 </div>
                 <div class="btn-row">
-                    <a href="https://enhance.njust.wiki" target="_blank" class="vb vb-outline vb-mini" style="text-decoration:none;flex:1;text-align:center;">🔗 点击前往增强助手官网</a>
+                    <a href="https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance" target="_blank" class="vb vb-outline vb-mini" style="text-decoration:none;flex:1;text-align:center;">🔗 点击前往增强助手官网</a>
                 </div>
             `,
             `<div id="course-list"></div>`
@@ -1781,10 +1759,14 @@
         const parseRows = () => {
             const rows = document.querySelectorAll('#dataList tr:not(:first-child)'), result = [];
             rows.forEach(row => {
-                if (row.cells.length < 7) return;
-                const a = row.querySelector('a[href*="openWindow"]');
+                if (row.cells.length < 8) return;
+                // BFU 使用 JsMod1 弹窗函数，NJUST 使用 openWindow
+                const a = row.querySelector('a[href*="JsMod1"]') ||
+                         row.querySelector('a[href*="openWindow"]');
                 if (!a) return;
-                const rawUrl = a.getAttribute('href').match(/'([^']+)'/)?.[1];
+                const href = a.getAttribute('href');
+                // 匹配 JsMod1('url',width,height) 或 openWindow('url',width,height)
+                const rawUrl = href.match(/'([^']+)'/)?.[1];
                 if (!rawUrl) return;
                 result.push({
                     key: courseKey(rawUrl), rawUrl,
@@ -1936,7 +1918,7 @@
                 bar.id = 'v80-manual-bar';
                 bar.style.cssText = 'position:sticky;top:0;left:0;width:100%;z-index:99999;box-sizing:border-box;background:#ebf8ff;border-bottom:2px solid #90cdf4;color:#2c5282;padding:10px 18px;font-family:sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.08);';
                 bar.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <span style="font-weight:700;font-size:13px;">🎓 南理工教务增强助手 V2</span>
+                    <span style="font-weight:700;font-size:13px;">🎓 北林教务增强助手 V1</span>
                     <span style="font-size:11px;padding:2px 9px;border-radius:7px;background:#edf2f7;color:#718096;border:1px solid #cbd5e0;">手动模式</span>
                     <span style="font-size:12px;color:#4a5568;">快捷填分：</span>
                     <button id="v8-fill-highest" class="vb vb-outline vb-mini">最高分</button>
@@ -1990,7 +1972,7 @@
         const bar = document.createElement('div');
         bar.style.cssText = `position:sticky;top:0;left:0;width:100%;z-index:99999;box-sizing:border-box;background:${bgColor};color:${textColor};border-bottom:2px solid ${bdColor};box-shadow:0 2px 8px rgba(0,0,0,0.08);font-family:sans-serif;`;
         bar.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 20px;">
-            <span style="font-weight:700;font-size:13px;">🎓 南理工教务增强助手 V2</span>
+            <span style="font-weight:700;font-size:13px;">🎓 北林教务增强助手 V1</span>
             <span style="font-size:11px;padding:2px 10px;border-radius:8px;background:rgba(255,255,255,0.5);border:1px solid ${bdColor};">${modeName}</span>
             <span id="edit-tag" style="font-size:11px;padding:2px 10px;border-radius:8px;background:rgba(0,0,0,0.06);border:1px solid ${bdColor};">初始化...</span>
             <span id="v8-total-display" style="font-size:17px;font-weight:800;color:${textColor};padding:1px 10px;border-radius:6px;border:1px solid ${bdColor};background:#fff;">总分 0</span>
@@ -2062,5 +2044,264 @@
                 }, 1000);
             }, 800);
         }
+    }
+})();
+
+
+// ================================================================
+//  【模块三】选课列表智能排序
+//  功能：可选课程置顶，冲突课程沉底，筛选/翻页后自动重排
+//  适用：选课中心及所有选课分类页面
+//  原理：注入页面上下文 → 拦截 fnServerData → 拉全量本地排序
+//        MutationObserver 监听表格重建（查询按钮会销毁重建 DataTable）
+// ================================================================
+
+(function () {
+    'use strict';
+
+    var path = window.location.pathname;
+    if (!path.includes('/xsxkkc/') && !path.includes('/xsxk/')) return;
+
+    var script = document.createElement('script');
+    script.textContent = '(' + function () {
+        'use strict';
+
+        var sortedCache = null,
+            fetchingAll = false,
+            lastUrl = '',
+            polling = 0,
+            MAX_POLL = 60;
+
+        // ── 状态徽标 ────────────────────────────────────────────
+        function showStatus(msg, bg) {
+            var el = document.getElementById('bjfu-sort-badge');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'bjfu-sort-badge';
+                el.style.cssText = 'position:fixed;top:10px;right:10px;z-index:100000;' +
+                    'padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;' +
+                    'font-family:-apple-system,BlinkMacSystemFont,sans-serif;pointer-events:none;';
+                document.body.appendChild(el);
+            }
+            el.textContent = msg;
+            var warn = bg === '#fffaf0';
+            el.style.background = bg || '#f0fff4';
+            el.style.color = warn ? '#c05621' : '#276749';
+            el.style.border = '1px solid ' + (warn ? '#feebc8' : '#c6f6d5');
+            el.style.opacity = '1';
+            clearTimeout(el._timer);
+            el._timer = setTimeout(function () { el.style.opacity = '0'; }, 3000);
+        }
+
+        // ── 排序逻辑 ────────────────────────────────────────────
+        function sortRows(aaData) {
+            return aaData.slice().sort(function (a, b) {
+                function conflict(row) {
+                    var c = row.ctsm;
+                    if (!c) return false;
+                    var s = String(c).trim();
+                    return s !== '' && s !== '&nbsp;';
+                }
+                return conflict(a) - conflict(b);
+            });
+        }
+
+        // ── 拉取全量数据 ────────────────────────────────────────
+        function fetchAllData(sSource, aoData, callback) {
+            var params = [];
+            for (var i = 0; i < aoData.length; i++) {
+                params.push({ name: aoData[i].name, value: aoData[i].value });
+            }
+            // 设置大页长
+            var hasLen = false;
+            for (var j = 0; j < params.length; j++) {
+                if (params[j].name === 'iDisplayLength') { params[j].value = '9999'; hasLen = true; }
+                if (params[j].name === 'iDisplayStart') { params[j].value = '0'; }
+            }
+            if (!hasLen) params.push({ name: 'iDisplayLength', value: '9999' });
+
+            var body = params.map(function (p) {
+                return encodeURIComponent(p.name) + '=' + encodeURIComponent(p.value);
+            }).join('&');
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', sSource, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+            xhr.timeout = 15000;
+            xhr.onload = function () {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (typeof kxkcHandleData === 'function') data = kxkcHandleData(data);
+                    callback(data && data.aaData ? data.aaData : []);
+                } catch (e) { callback([]); }
+            };
+            xhr.onerror = function () { callback([]); };
+            xhr.send(body);
+        }
+
+        // ── 将排序覆盖安装到指定 DataTable 实例 ──────────────────
+        function installSort(dt) {
+            var os;
+            try { os = dt.fnSettings(); } catch (e) { return false; }
+            if (!os || !os.oFeatures || !os.oFeatures.bServerSide) return false;
+
+            var origFn = os.fnServerData;
+
+            function gpv(arr, name) {
+                for (var i = 0; i < arr.length; i++) {
+                    if (arr[i].name === name) return arr[i].value;
+                }
+                return null;
+            }
+
+            os.fnServerData = function (sSource, aoData, fnCallback) {
+                var curUrl = sSource;
+                if (sortedCache && curUrl === lastUrl) {
+                    // 筛选条件没变，从缓存切片返回
+                    var start = parseInt(gpv(aoData, 'iDisplayStart'), 10) || 0;
+                    var len = parseInt(gpv(aoData, 'iDisplayLength'), 10) || 15;
+                    var echo = gpv(aoData, 'sEcho');
+                    var page = sortedCache.slice(start, start + len);
+                    fnCallback({
+                        sEcho: echo,
+                        iTotalRecords: sortedCache.length,
+                        iTotalDisplayRecords: sortedCache.length,
+                        aaData: page
+                    });
+                } else if (!fetchingAll) {
+                    // 首次或筛选条件变了 → 拉全量
+                    sortedCache = null;
+                    lastUrl = curUrl;
+                    fetchingAll = true;
+                    showStatus('正在加载全部课程…', '#fffaf0');
+                    origFn.call(this, sSource, aoData, fnCallback);
+                    fetchAllData(sSource, aoData, function (allData) {
+                        sortedCache = sortRows(allData);
+                        fetchingAll = false;
+                        var avail = 0;
+                        for (var i = 0; i < sortedCache.length; i++) {
+                            var c = sortedCache[i].ctsm;
+                            var s = c ? String(c).trim() : '';
+                            if (!s || s === '&nbsp;') avail++;
+                        }
+                        showStatus('已排序：' + avail + ' 门可选 ↑   ' +
+                            (sortedCache.length - avail) + ' 门冲突 ↓');
+                        dt.fnDraw();
+                    });
+                } else {
+                    // 正在拉取中
+                    origFn.call(this, sSource, aoData, fnCallback);
+                }
+            };
+            return true;
+        }
+
+        // ── 尝试在当前页面安装排序 ──────────────────────────────
+        function tryInstallOnCurrent() {
+            if (typeof jQuery === 'undefined' || !jQuery.fn.dataTable) return false;
+            var dt;
+            try { dt = jQuery('#dataView').dataTable(); } catch (e) { return false; }
+            if (!dt || !dt.fnSettings) return false;
+            var os = dt.fnSettings();
+            if (!os || !os.oFeatures || !os.oFeatures.bServerSide) return false;
+            // 检查是否已经安装过（避免重复包装）
+            if (os.fnServerData.toString().indexOf('sortedCache') > -1) return true;
+            if (installSort(dt)) {
+                dt.fnDraw();
+                return true;
+            }
+            return false;
+        }
+
+        // ── 轮询等待 DataTable 就绪 ────────────────────────────
+        function pollAndInstall() {
+            polling++;
+            if (tryInstallOnCurrent()) {
+                console.log('[北林教务] 选课排序已安装');
+                return;
+            }
+            if (polling < MAX_POLL) setTimeout(pollAndInstall, 250);
+        }
+
+        // ── ★ MutationObserver：监听表格被 queryKxkcList 销毁重建 ─
+        function startObserver() {
+            // 选课列表通常在 #mainDiv 里，每个类别页面结构可能不同
+            var target = document.getElementById('mainDiv') ||
+                         document.querySelector('#dataView') ||
+                         document.body;
+
+            // 向上找到合适的观察容器（不会被销毁的）
+            var observeTarget = document.body;
+            if (target && target !== document.body) {
+                // 找一个不会被 innerHTML 替换的祖先节点
+                var p = target.parentNode;
+                while (p && p !== document.body) {
+                    if (p.parentNode === document.body) { observeTarget = p; break; }
+                    p = p.parentNode;
+                }
+            }
+
+            var observer = new MutationObserver(function (mutations) {
+                for (var i = 0; i < mutations.length; i++) {
+                    var added = mutations[i].addedNodes;
+                    for (var j = 0; j < added.length; j++) {
+                        var node = added[j];
+                        if (node.nodeType !== 1) continue;
+                        // 检测新的 #dataView 表格被插入
+                        if (node.id === 'dataView' ||
+                            (node.querySelector && node.querySelector('#dataView'))) {
+                            // 表格重建了！重置并重新安装
+                            sortedCache = null;
+                            fetchingAll = false;
+                            lastUrl = '';
+                            polling = 0;
+                            console.log('[北林教务] 检测到表格重建，重新安装排序');
+                            setTimeout(pollAndInstall, 200);
+                            return;
+                        }
+                    }
+                }
+            });
+
+            observer.observe(observeTarget, { childList: true, subtree: true });
+            console.log('[北林教务] MutationObserver 已启动，监控容器：' +
+                (observeTarget.id || observeTarget.tagName));
+        }
+
+        // ── ★ 同时拦截 queryKxkcList，作为双重保险 ─────────────
+        var qkl = window.queryKxkcList;
+        if (qkl && !window._bjfu_qkl_hooked) {
+            window._bjfu_qkl_hooked = true;
+            window.queryKxkcList = function () {
+                // 清掉状态让后续轮询走全新拉取
+                sortedCache = null;
+                fetchingAll = false;
+                lastUrl = '';
+                polling = 0;
+                var ret = qkl.apply(this, arguments);
+                setTimeout(pollAndInstall, 200);
+                return ret;
+            };
+            console.log('[北林教务] queryKxkcList 已拦截');
+        }
+
+        // ── 启动 ────────────────────────────────────────────────
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+                setTimeout(pollAndInstall, 400);
+                startObserver();
+            });
+        } else {
+            setTimeout(pollAndInstall, 400);
+            startObserver();
+        }
+    } + ')();';
+
+    if (document.body) {
+        document.body.appendChild(script);
+    } else {
+        document.addEventListener('DOMContentLoaded', function () {
+            document.body.appendChild(script);
+        });
     }
 })();

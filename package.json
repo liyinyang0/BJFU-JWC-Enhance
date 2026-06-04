@@ -1,11 +1,8 @@
 {
-  "name": "njust-jwc-enhance",
+  "name": "bjfu-jwc-enhance",
   "version": "1.0.0",
-  "description": "南理工教务处增强程序及配套的数据采集处理",
+  "description": "北京林业大学教务系统增强助手 - 基于强智科技平台",
   "main": "enhance.js",
-  "directories": {
-    "doc": "docs"
-  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -14,9 +11,13 @@
     "url": "git+https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance.git"
   },
   "keywords": [
-    "南京理工大学"
+    "北京林业大学",
+    "BJFU",
+    "强智科技",
+    "教务系统",
+    "userscript"
   ],
-  "author": "Light",
+  "author": "Light (adapted for BJFU)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance/issues"
