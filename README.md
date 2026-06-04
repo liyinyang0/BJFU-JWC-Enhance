@@ -21,6 +21,7 @@
 ### 2. 安装脚本
 
 法一:打开 Tampermonkey → 创建新脚本 → 将 `enhance.js` 全部内容粘贴 → 保存。
+
 法二:下载“enhance.js”>拖拽进Tampermonkey界面>确定安装。
 
 ### 3. 使用
