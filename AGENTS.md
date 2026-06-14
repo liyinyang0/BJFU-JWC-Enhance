@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 ## 项目概述
 
@@ -19,7 +19,7 @@
 ├── style.css          # GitHub Pages 样式
 ├── package.json       # 项目元数据
 ├── LICENSE            # MIT 协议
-└── CLAUDE.md          # 本文件
+└── AGENTS.md          # 本文件
 ```
 
 ## enhance.js 架构

@@ -2,12 +2,10 @@
 // @name         北林教务增强助手 V1 | 支持自动评教
 // @namespace    http://tampermonkey.net/
 // @version      1.0.0.0
-// @description  在合适的地方显示课程大纲、选修课类别及选修课学分情况，并自动刷新登录状态。同时支持自动评教与批量提交。
+// @description  在合适的地方显示老师说明及课程学分情况，并自动刷新登录状态。同时支持自动评教与批量提交。
 // @match        http://newjwxt.bjfu.edu.cn/*
 // @match        https://newjwxt.bjfu.edu.cn/*
-// @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
-// @connect      jsdelivr.net
 // @author       Light (adapted for BFU)
 // @license      MIT
 // @supportURL   https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance
@@ -15,34 +13,12 @@
 
 // ================================================================
 //  【模块一】核心增强功能模块
-//  职责：数据抓取、课程信息增强（大纲/类别）、学分统计、登录保活
+//  职责：课程信息增强（老师说明）、学分统计、登录保活
 //  设计模式：单例对象（Singleton）组织各子系统
 // ================================================================
 
 (function () {
     'use strict';
-
-    /**
-     * ── 数据源镜像配置 ─────────────────────────────────────────────
-     * 采用多节点冗余设计，解决部分节点在大规模访问时的稳定性问题。
-     * 优先级顺序：官方主站 > jsDelivr 加速 > jsDelivr 备用 > GitHub Raw。
-     */
-
-    // 选修课类别数据源（JSON 格式）
-    // TODO: 需要为北林课程重新采集数据。当前使用 NJUST 数据作为占位。
-    const CATEGORY_URLS = [
-        'https://fastly.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/xxk.json',                        // jsDelivr 全球加速（NJUST数据占位）
-        'https://testingcf.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/xxk.json',                    // jsDelivr Cloudflare（NJUST数据占位）
-        'https://raw.githubusercontent.com/NJUST-OpenLib/NJUST-JWC-Enhance/refs/heads/main/data/xxk.json'             // GitHub 原始文件（备用）
-    ];
-
-    // 课程大纲索引数据源（包含课程代码到 jx02id 的映射）
-    // TODO: 需要为北林课程重新采集数据。当前使用 NJUST 数据作为占位。
-    const OUTLINE_URLS = [
-        'https://fastly.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/kcdg.json',                        // jsDelivr 全球加速（NJUST数据占位）
-        'https://testingcf.jsdelivr.net/gh/NJUST-OpenLib/NJUST-JWC-Enhance@latest/data/kcdg.json',                    // jsDelivr Cloudflare（NJUST数据占位）
-        'https://raw.githubusercontent.com/NJUST-OpenLib/NJUST-JWC-Enhance/refs/heads/main/data/kcdg.json'             // GitHub 原始文件（备用）
-    ];
 
     /**
      * ── 全局配置选项 ───────────────────────────────────────────────
@@ -58,18 +34,7 @@
      */
     const DEBUG_CONFIG = {
         enabled: true,
-        level: 3,
-        showCache: true // 是否在日志中详细记录缓存的存取动作
-    };
-
-    /**
-     * ── 缓存系统配置 ───────────────────────────────────────────────
-     * 使用 localStorage 存储远程 JSON 数据，减少重复的网络请求，提升页面加载速度。
-     */
-    const CACHE_CONFIG = {
-        enabled: true,
-        ttl: 86400,                   // 缓存有效期：（单位：秒）
-        prefix: 'bjfu_jwc_enhance_'  // 本脚本专用的缓存键名前缀
+        level: 3
     };
 
     /**
@@ -289,107 +254,8 @@
     };
 
     /**
-     * ── 缓存系统 ────────────────────────────────────────────────────
-     * 负责远程 JSON 数据在本地 localStorage 的存取、过期判断及统计。
+     * ── 日志系统初始化 ───────────────────────────────────────────────
      */
-    const CacheManager = {
-        /**
-         * 生成 URL 对应的哈希键名
-         */
-        getKey(url) {
-            return CACHE_CONFIG.prefix + btoa(unescape(encodeURIComponent(url))).replace(/[^a-zA-Z0-9]/g, '');
-        },
-
-        /**
-         * 存入缓存
-         */
-        set(url, data) {
-            if (!CACHE_CONFIG.enabled) return false;
-            try {
-                const cacheData = {
-                    data,
-                    timestamp: Date.now(),
-                    ttl: CACHE_CONFIG.ttl * 1000,
-                    url
-                };
-                localStorage.setItem(this.getKey(url), JSON.stringify(cacheData));
-                if (DEBUG_CONFIG.showCache) Logger.info(`💾 缓存已保存: ${url}`);
-                return true;
-            } catch (e) {
-                Logger.error('缓存保存失败: ', e);
-                return false;
-            }
-        },
-
-        /**
-         * 读取缓存（包含过期校验）
-         */
-        get(url) {
-            if (!CACHE_CONFIG.enabled) return null;
-            try {
-                const key = this.getKey(url);
-                const cached = localStorage.getItem(key);
-                if (!cached) {
-                    if (DEBUG_CONFIG.showCache) Logger.debug(`缓存未命中: ${url}`);
-                    return null;
-                }
-                const cacheData = JSON.parse(cached);
-                const now = Date.now();
-                // 过期判断
-                if (now - cacheData.timestamp > cacheData.ttl) {
-                    localStorage.removeItem(key);
-                    if (DEBUG_CONFIG.showCache) Logger.warn(`⏰ 缓存已过期: ${url}`);
-                    return null;
-                }
-                const age = ((now - cacheData.timestamp) / 1000).toFixed(1);
-                const remaining = ((cacheData.ttl - (now - cacheData.timestamp)) / 1000).toFixed(1);
-                if (DEBUG_CONFIG.showCache) Logger.info(`✅ 缓存命中: ${url} (已缓存${age}s，剩余${remaining}s)`);
-                return cacheData.data;
-            } catch (e) {
-                Logger.error('缓存读取失败: ', e);
-                return null;
-            }
-        },
-
-        /**
-         * 清空本脚本产生的所有缓存
-         */
-        clear() {
-            try {
-                const keys = Object.keys(localStorage).filter(k => k.startsWith(CACHE_CONFIG.prefix));
-                keys.forEach(k => localStorage.removeItem(k));
-                Logger.info(`已清除 ${keys.length} 个缓存项`);
-                return keys.length;
-            } catch (e) {
-                Logger.error('清除缓存失败: ', e);
-                return 0;
-            }
-        },
-
-        /**
-         * 获取缓存占用情况统计
-         */
-        getStats() {
-            try {
-                const keys = Object.keys(localStorage).filter(k => k.startsWith(CACHE_CONFIG.prefix));
-                let totalSize = 0, validCount = 0, expiredCount = 0;
-                const now = Date.now();
-                keys.forEach(k => {
-                    try {
-                        const cached = localStorage.getItem(k);
-                        totalSize += cached.length;
-                        const d = JSON.parse(cached);
-                        (now - d.timestamp > d.ttl) ? expiredCount++ : validCount++;
-                    } catch (e) { expiredCount++; }
-                });
-                return { total: keys.length, valid: validCount, expired: expiredCount, size: totalSize };
-            } catch (e) {
-                Logger.error('获取缓存统计失败: ', e);
-                return { total: 0, valid: 0, expired: 0, size: 0 };
-            }
-        }
-    };
-
     // fix④: 彻底移除与 LogPanelUI 职责重叠的 StatusNotifier，
     //        原代码中该系统的调用已被注释，直接删除其定义以消除冗余。
 
@@ -402,13 +268,8 @@
         setTimeout(() => {
             try {
                 Logger.info('北林教务增强助手已启动', {
-                    debug: DEBUG_CONFIG.enabled ? `Level ${DEBUG_CONFIG.level}` : '关闭',
-                    cache: CACHE_CONFIG.enabled ? `TTL ${CACHE_CONFIG.ttl}s` : '关闭'
+                    debug: DEBUG_CONFIG.enabled ? `Level ${DEBUG_CONFIG.level}` : '关闭'
                 });
-                if (DEBUG_CONFIG.enabled && DEBUG_CONFIG.showCache) {
-                    const stats = CacheManager.getStats();
-                    Logger.info(`缓存统计: 总${stats.total} 有效${stats.valid} 过期${stats.expired} ${(stats.size / 1024).toFixed(1)}KB`);
-                }
             } catch (e) {
                 console.error('初始化日志失败: ', e);
             }
@@ -462,9 +323,6 @@
     }
 
     initializePromoBanner();
-
-    let courseCategoryMap = {};
-    let courseOutlineMap = {};
 
     // ==================== 统一弹窗 ====================
     function createUnifiedModal(title, content, type = 'info') {
@@ -706,116 +564,6 @@
         insertTarget.parentNode.insertBefore(promoLine, insertTarget);
     }
 
-    // ==================== 数据加载（智能切源）====================
-    // fix⑤: 无论第几个数据源成功，均进行缓存；缓存读取也遍历所有 URL
-    function loadJSONWithFallback(urls) {
-        return new Promise((resolve, reject) => {
-            const urlArray = Array.isArray(urls) ? urls : [urls];
-            const fileName = urlArray[0].includes('xxk') ? '选修课分类' : '课程大纲';
-
-            Logger.info(`开始加载 ${fileName}，共 ${urlArray.length} 个数据源`);
-
-            // fix⑤: 先遍历所有 URL，尝试从缓存中命中任意一个
-            for (const url of urlArray) {
-                const cachedData = CacheManager.get(url);
-                if (cachedData) {
-                    Logger.info(`从缓存读取 ${fileName} 成功 (${url})`);
-                    resolve(cachedData);
-                    return;
-                }
-            }
-
-            // 缓存全部未命中，依次请求网络
-            let currentIndex = 0;
-
-            function tryNextUrl() {
-                if (currentIndex >= urlArray.length) {
-                    Logger.error(`${fileName} 所有数据源均不可用`);
-                    reject(new Error(`所有数据源都不可用: ${fileName}`));
-                    return;
-                }
-
-                const currentUrl = urlArray[currentIndex++];
-                Logger.info(`尝试数据源 ${currentIndex}/${urlArray.length}: ${currentUrl}`);
-                const startTime = Date.now();
-
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: currentUrl,
-                    timeout: 10000,
-                    onload(response) {
-                        const loadTime = Date.now() - startTime;
-                        try {
-                            const json = JSON.parse(response.responseText);
-                            // fix⑤: 无论哪个数据源成功，均以该 URL 为键进行缓存
-                            const cached = CacheManager.set(currentUrl, json);
-                            Logger.info(
-                                `数据源 ${currentIndex} 请求成功 (${loadTime}ms, ${response.responseText.length}B, 缓存${cached ? '已保存' : '失败'})`
-                            );
-                            resolve(json);
-                        } catch (e) {
-                            Logger.error(`JSON 解析失败: ${currentUrl}`, e);
-                            tryNextUrl();
-                        }
-                    },
-                    onerror() {
-                        Logger.warn(`数据源 ${currentIndex} 请求失败 (${Date.now() - startTime}ms): ${currentUrl}`);
-                        tryNextUrl();
-                    },
-                    ontimeout() {
-                        Logger.warn(`数据源 ${currentIndex} 请求超时: ${currentUrl}`);
-                        tryNextUrl();
-                    }
-                });
-            }
-
-            tryNextUrl();
-        });
-    }
-
-    function loadJSON(url) {
-        return loadJSONWithFallback(Array.isArray(url) ? url : [url]);
-    }
-
-    // ==================== 构建课程映射 ====================
-    function buildCourseMaps(categoryList, outlineList) {
-        try {
-            let categoryCount = 0, outlineCount = 0;
-
-            if (Array.isArray(categoryList)) {
-                categoryList.forEach(item => {
-                    try {
-                        if (item && item.course_code && item.category) {
-                            courseCategoryMap[item.course_code.trim()] = item.category;
-                            categoryCount++;
-                        }
-                    } catch (e) { Logger.warn('处理分类数据项时出错:', e); }
-                });
-            } else {
-                Logger.warn('分类数据不是数组格式:', typeof categoryList);
-            }
-
-            if (Array.isArray(outlineList)) {
-                outlineList.forEach(item => {
-                    try {
-                        if (item && item.course_code && item.id) {
-                            courseOutlineMap[item.course_code.trim()] = item.id;
-                            outlineCount++;
-                        }
-                    } catch (e) { Logger.warn('处理大纲数据项时出错:', e); }
-                });
-            } else {
-                Logger.warn('大纲数据不是数组格式:', typeof outlineList);
-            }
-
-            Logger.info(`课程映射构建完成: 选修课类别 ${categoryCount} 条，课程大纲 ${outlineCount} 条`);
-        } catch (e) {
-            Logger.error('构建课程映射表失败:', e);
-            if (typeof courseCategoryMap !== 'object') courseCategoryMap = {};
-            if (typeof courseOutlineMap !== 'object') courseOutlineMap = {};
-        }
-    }
-
     // ==================== 学分统计悬浮窗 ====================
     function createCreditSummaryWindow() {
         try {
@@ -846,8 +594,7 @@
                     <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid #e0e0e0;
                         font-size: 13px; color: #888; line-height: 1.6; text-align: left;">
                         <li>对照个人培养方案核实具体修课要求</li>
-                        <li>选修课类别统计仅包含已知分类的通识教育选修课</li>
-                        <li>课程分类信息可能随时更新，请以教务处最新通知为准</li>
+                        <li>课程信息以教务处官网为准</li>
                         <div style="margin-bottom: 8px;">
                             <span>请查看 <a href="https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance" target="_blank"
                                 style="color: #007bff; text-decoration: none;">增强助手官网</a> 获取使用说明</span>
@@ -921,40 +668,25 @@
             if (!creditSummaryDiv) { Logger.warn('未找到学分统计容器'); return; }
 
             const creditsByType = {};
-            const creditsByCategory = {};
             const tables = document.querySelectorAll('table');
 
             tables.forEach(table => {
                 table.querySelectorAll('tr').forEach(row => {
                     const tds = row.querySelectorAll('td');
                     if (tds.length < 12) return;
-                    const courseCode = tds[2].textContent.trim();
                     const credit = parseFloat(tds[5].textContent) || 0;
                     const courseType = tds[7].textContent.trim();
-
-                    const categoryDiv = tds[2].querySelector('[data-category-inserted]');
-                    let category = null;
-                    if (categoryDiv) {
-                        category = categoryDiv.textContent.trim() || null;
-                    }
 
                     if (courseType) {
                         if (!creditsByType[courseType]) creditsByType[courseType] = { credits: 0, count: 0 };
                         creditsByType[courseType].credits += credit;
                         creditsByType[courseType].count++;
                     }
-                    if (category) {
-                        if (!creditsByCategory[category]) creditsByCategory[category] = { credits: 0, count: 0 };
-                        creditsByCategory[category].credits += credit;
-                        creditsByCategory[category].count++;
-                    }
                 });
             });
 
             const totalCreditsByType = Object.values(creditsByType).reduce((s, d) => s + d.credits, 0);
             const totalCountByType = Object.values(creditsByType).reduce((s, d) => s + d.count, 0);
-            const totalCreditsByCategory = Object.values(creditsByCategory).reduce((s, d) => s + d.credits, 0);
-            const totalCountByCategory = Object.values(creditsByCategory).reduce((s, d) => s + d.count, 0);
 
             let summaryHTML = `<div style="border-bottom: 1px solid #e0e0e0; margin-bottom: 12px; padding-bottom: 10px;">`;
             summaryHTML += `<div style="margin-bottom: 8px; font-size: 15px; color: #222; font-weight: 600;">📊 按课程性质统计</div>`;
@@ -972,24 +704,6 @@
             }
             summaryHTML += `</div></div>`;
 
-            if (Object.keys(creditsByCategory).length > 0) {
-                summaryHTML += `<div style="margin-top: 16px;">`;
-                summaryHTML += `<div style="margin-bottom: 8px; font-size: 15px; color: #222; font-weight: 600;">🏷️ 按选修课类别统计</div>`;
-                summaryHTML += `<div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 6px; background: #f7f7fa; border-radius: 4px; padding: 4px 6px; margin-bottom: 4px;">
-                    <span style="color: #007bff; font-weight: 600; font-size: 13px;">总计</span>
-                    <span style="font-weight: 600; color: #007bff; font-size: 13px;">${totalCreditsByCategory.toFixed(1)} 学分</span>
-                    <span style="color: #007bff; font-weight: 600; font-size: 13px;">${totalCountByCategory} 门</span>
-                </div><div style="display: grid; gap: 2px;">`;
-                for (const [category, data] of Object.entries(creditsByCategory)) {
-                    summaryHTML += `<div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 6px; padding: 2px 0; align-items: center;">
-                        <span style="color: #444; font-size: 13px;">${category}</span>
-                        <span style="color: #333; font-size: 13px;">${data.credits.toFixed(1)} 学分</span>
-                        <span style="color: #888; font-size: 13px;">${data.count} 门</span>
-                    </div>`;
-                }
-                summaryHTML += `</div></div>`;
-            }
-
             creditSummaryDiv.innerHTML = summaryHTML || '暂无数据';
             Logger.debug('学分统计更新完成');
         } catch (e) {
@@ -1001,7 +715,7 @@
 
     /**
      * ── 课程信息增强核心逻辑 ───────────────────────────────────────
-     * 负责解析教务系统的表格 DOM，并根据映射表插入大纲链接、选修课类别等信息。
+     * 负责解析教务系统的表格 DOM，并插入老师说明等辅助信息。
      */
     function processAllTables() {
         try {
@@ -1047,24 +761,7 @@
                             if (!courseCode) return;
                             let courseEnhanced = false;
 
-                            // 1. 插入选修课类别（如：人文素养、自然科学等）
-                            try {
-                                if (courseCodeTd && !courseCodeTd.querySelector('[data-category-inserted]')) {
-                                    const category = courseCategoryMap[courseCode];
-                                    if (category) {
-                                        const catDiv = document.createElement('div');
-                                        catDiv.setAttribute('data-category-inserted', '1');
-                                        catDiv.style.color = '#28a745';
-                                        catDiv.style.fontWeight = 'bold';
-                                        catDiv.style.marginTop = '4px';
-                                        catDiv.textContent = category;
-                                        courseCodeTd.appendChild(catDiv);
-                                        courseEnhanced = true;
-                                    }
-                                }
-                            } catch (e) { Logger.warn('添加课程类别时出错:', e); }
-
-                            // 2. 插入老师说明（将 <td> 的 title 属性显性化）
+                            // 1. 插入老师说明（将 <td> 的 title 属性显性化）
                             try {
                                 if (!isGradePage && !isSchedulePage && courseCodeTd &&
                                     courseCodeTd.title && !courseCodeTd.querySelector('[data-title-inserted]')) {
@@ -1079,33 +776,6 @@
                                     courseEnhanced = true;
                                 }
                             } catch (e) { Logger.warn('添加老师说明时出错:', e); }
-
-                            // 3. 插入教学大纲链接
-                            try {
-                                if (courseCodeTd && !courseCodeTd.querySelector('[data-outline-inserted]')) {
-                                    const outlineDiv = document.createElement('div');
-                                    outlineDiv.setAttribute('data-outline-inserted', '1');
-                                    outlineDiv.style.marginTop = '4px';
-
-                                    {
-                                        const realId = courseOutlineMap[courseCode];
-                                        if (realId) {
-                                            const link = document.createElement('a');
-                                            // 拼接教务处官网预览链接（北林使用 newjwxt.bjfu.edu.cn）
-                                            link.href = `http://newjwxt.bjfu.edu.cn/kcxxAction.do?method=kcdgView&jx02id=${realId}&isentering=0`;
-                                            link.textContent = '📘 查看课程大纲';
-                                            link.target = '_blank';
-                                            link.style.color = '#0077cc';
-                                            outlineDiv.appendChild(link);
-                                        } else {
-                                            outlineDiv.textContent = '❌ 无大纲信息';
-                                            outlineDiv.style.color = 'gray';
-                                        }
-                                    }
-                                    courseCodeTd.appendChild(outlineDiv);
-                                    courseEnhanced = true;
-                                }
-                            } catch (e) { Logger.warn('添加课程大纲链接时出错:', e); }
 
                             if (courseEnhanced) enhancedCourses++;
                         } catch (e) { Logger.warn('处理表格行时出错:', e); }
@@ -1227,7 +897,7 @@
     /**
      * ── 脚本入口初始化 ──────────────────────────────────────────────
      */
-    async function init() {
+    function init() {
         try {
             Logger.info('开始执行主要逻辑');
 
@@ -1237,22 +907,12 @@
                 return;
             }
 
-            const currentUrl = window.location.href;
-
             // 1. 登录保活与状态检查
             autoRefreshLoginStatus();
             checkLoginErrorAndRefresh();
 
-            // 2. 加载远程配置数据
-            Logger.info('开始加载数据');
-            const [categoryData, outlineData] = await Promise.all([
-                loadJSON(CATEGORY_URLS),
-                loadJSON(OUTLINE_URLS)
-            ]);
-
-            // 3. 构建索引并执行初次处理
-            Logger.info('数据加载完成，构建映射表');
-            buildCourseMaps(categoryData, outlineData);
+            // 2. 执行初次处理
+            Logger.info('开始处理页面');
 
             if (window.location.pathname.includes('/jsxsd/kscj/cjcx_list')) {
                 createCreditSummaryWindow();
@@ -1261,7 +921,7 @@
             processAllTables();
 
             /**
-             * 4. 动态监听系统
+             * 3. 动态监听系统
              * 解决教务系统通过 AJAX 异步切换页面（如点击菜单）导致脚本失效的问题。
              */
             let isProcessing = false;
@@ -1276,9 +936,7 @@
                                 if (node.nodeType !== Node.ELEMENT_NODE) continue;
                                 // 忽略脚本自己插入的 DOM
                                 if (node.hasAttribute &&
-                                    (node.hasAttribute('data-category-inserted') ||
-                                        node.hasAttribute('data-title-inserted') ||
-                                        node.hasAttribute('data-outline-inserted'))) {
+                                    node.hasAttribute('data-title-inserted')) {
                                     return false;
                                 }
                                 // 只关注表格类变更
