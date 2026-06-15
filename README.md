@@ -20,9 +20,13 @@
 
 ### 2. 安装脚本
 
-法一:打开 Tampermonkey → 创建新脚本 → 将 `enhance.js` 全部内容粘贴 → 保存。
+**推荐（自动更新）**：从 Greasy Fork 一键安装  
+👉 [北林教务增强助手 V1 \| 支持自动评教](https://greasyfork.org/zh-CN/scripts/582855-%E5%8C%97%E6%9E%97%E6%95%99%E5%8A%A1%E5%A2%9E%E5%BC%BA%E5%8A%A9%E6%89%8B-v1-%E6%94%AF%E6%8C%81%E8%87%AA%E5%8A%A8%E8%AF%84%E6%95%99)
 
-法二:下载“enhance.js”>拖拽进Tampermonkey界面>确定安装。
+其他方式：
+
+- 法一：打开 Tampermonkey → 创建新脚本 → 将 `enhance.js` 全部内容粘贴 → 保存。
+- 法二：下载 `enhance.js` → 拖拽进 Tampermonkey 界面 → 确定安装。
 
 ### 3. 使用
 
@@ -31,12 +35,33 @@
 ## 📁 项目结构
 
 ```
-├── enhance.js         # 主脚本
+├── enhance.js         # 构建产物（Tampermonkey 安装文件，勿直接编辑）
+├── src/               # 源代码
+│   ├── main.js        # 入口，按顺序初始化四个模块
+│   ├── config/        # 全局配置
+│   ├── core/          # 模块一：核心增强（日志、学分统计、登录保活等）
+│   ├── eval/          # 模块二：自动评教
+│   ├── course-sort/   # 模块三：选课排序
+│   └── captcha/       # 模块四：验证码识别
+├── scripts/           # 构建与验证脚本
+│   ├── build.js       # esbuild 打包
+│   └── verify-bundle.js
 ├── style.css          # GitHub Pages 样式
 ├── package.json       # 项目元数据
 ├── LICENSE            # MIT 协议
-└── CLAUDE.md          # 本文件
+└── CLAUDE.md          # 开发文档
 ```
+
+## 🛠 开发
+
+```bash
+npm install
+npm run build    # 打包生成 enhance.js
+npm run dev      # 监听 src/ 变化自动打包
+npm run verify   # 验证构建产物
+```
+
+修改请针对 `src/` 目录下的源文件，完成后运行 `npm run build` 重新生成根目录的 `enhance.js`，并一并提交。
 
 ## ⚠️ 注意事项
 
