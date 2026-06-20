@@ -4,11 +4,18 @@
   "description": "北京林业大学教务系统增强助手 - 基于强智科技平台",
   "main": "enhance.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node scripts/build.js",
+    "dev": "node scripts/build.js --watch",
+    "verify": "node scripts/verify-bundle.js",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.0",
+    "vitest": "^4.1.9"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance.git"
+    "url": "git+https://github.com/liyinyang0/BJFU-JWC-Enhance.git"
   },
   "keywords": [
     "北京林业大学",
@@ -20,7 +27,7 @@
   "author": "Light (adapted for BJFU)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance/issues"
+    "url": "https://github.com/liyinyang0/BJFU-JWC-Enhance/issues"
   },
-  "homepage": "https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance#readme"
+  "homepage": "https://github.com/liyinyang0/BJFU-JWC-Enhance#readme"
 }
