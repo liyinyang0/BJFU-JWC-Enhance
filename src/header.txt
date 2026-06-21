@@ -1,0 +1,12 @@
+// ==UserScript==
+// @name         北林教务增强助手 V1 | 支持自动评教
+// @namespace    http://tampermonkey.net/
+// @version      1.0.0.0
+// @description  在合适的地方显示老师说明及课程学分情况，并自动刷新登录状态。同时支持自动评教与批量提交。
+// @match        http://newjwxt.bjfu.edu.cn/*
+// @match        https://newjwxt.bjfu.edu.cn/*
+// @grant        unsafeWindow
+// @author       Light (adapted for BFU)
+// @license      MIT
+// @supportURL   https://github.com/liyinyang0/BJFU-JWC-Enhance
+// ==/UserScript==

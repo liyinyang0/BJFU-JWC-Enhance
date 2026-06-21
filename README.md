@@ -4,6 +4,8 @@
 
 从 [NJUST-JWC-Enhance](https://github.com/NJUST-OpenLib/NJUST-JWC-Enhance) 派生，为北京林业大学教务系统 (`newjwxt.bjfu.edu.cn`) 适配。
 
+**本项目仓库**：<https://github.com/liyinyang0/BJFU-JWC-Enhance> —— 问题反馈、源码与更新说明请访问此处。
+
 ## ✨ 功能
 
 - 📊 **学分统计** — 成绩页右上角弹窗，按课程性质汇总
